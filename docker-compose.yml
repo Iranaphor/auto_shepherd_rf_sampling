@@ -1,0 +1,29 @@
+# ###########################################################################
+#
+# @author      James R. Heselden (github: iranaphor)
+# @maintainer  James R. Heselden (github: iranaphor)
+# @datecreated 24th November 2025
+# @credits     Code structure and implementation were developed by the
+#              author with assistance from OpenAI's GPT-5.1 model, used
+#              under the author's direction and supervision.
+#
+# ###########################################################################
+
+services:
+  app:
+
+    # Build locally running the dockerfile relative to the context of the cwd
+    build: .
+
+    # Run container processes as the same UID:GID as the host user
+    user: "${UID}:${GID}"
+
+    # Mount local ./data directory into /data in the container
+    # Mount local ./src directory into /src in the container
+    volumes:
+      - ./data:/data
+      - ./app:/app
+
+    #Declare the environment variable $DATA_PATH
+    environment:
+      - DATA_PATH=/data/test2
