@@ -1,0 +1,9 @@
+# Ignore everything
+*
+
+# But not this file
+!.gitignore
+
+# And not the test1 directory or its contents
+!/sample/
+!/sample/**
