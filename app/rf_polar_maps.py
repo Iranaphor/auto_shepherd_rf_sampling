@@ -22,6 +22,7 @@
 # ###########################################################################
 
 import os
+import csv
 import math
 import yaml
 import numpy as np
@@ -755,12 +756,49 @@ def plot_xy_obstacles_with_rf(
 # MAIN
 # =========================
 
+def generate_points_yaml(csv_path, yaml_path, center):
+
+    if not os.path.exists(csv_path):
+        print('[CSV] file does not exist')
+        return
+
+    with open(csv_path, newline="") as csvfile, open(yaml_path, "w") as yamlfile:
+        reader = csv.reader(csvfile)
+
+        # Header comments
+        yamlfile.write("# ----------------------\n")
+        yamlfile.write("# YAML\n")
+        yamlfile.write("#\n")
+        yamlfile.write("# ----------------------\n")
+
+        # Center line
+        yamlfile.write(f"center: [{center[0]}, {center[1]}]\n")
+        yamlfile.write("gps_coords_xyv:\n")
+
+        # Each row is [v, x, y, d, f]
+        for row in reader:
+            # skip empty lines
+            if not row or all(cell.strip() == "" for cell in row):
+                continue
+
+            v = float(row[0])
+            x = float(row[1])
+            y = float(row[2])
+
+            yamlfile.write(f"  -  [{x}, {y}, {v}]\n")
+
 def main():
     path = os.getenv('DATA_PATH')
 
     # Your fixed file names
+    csv_path = os.path.join(path, "all.csv")
     yaml_path = os.path.join(path, "points.yaml")
     kml_path = os.path.join(path, "feature_map.kml")
+    center = [os.getenv('CENTER_LAT'), os.getenv('CENTER_LON')]
+
+    # 0) Construct yaml file
+    print(f"[CVS] Updated yaml to match data in {csv_path}.")
+    generate_points_yaml(csv_path, yaml_path, centre)
 
     # 1) Load YAML
     center_lat, center_lon, points = load_yaml_points(yaml_path)

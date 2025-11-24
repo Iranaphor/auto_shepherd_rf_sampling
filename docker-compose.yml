@@ -27,3 +27,5 @@ services:
     #Declare the environment variable $DATA_PATH
     environment:
       - DATA_PATH=/data/test2
+      - CENTER_LAT=53.26831
+      - CENTER_LON=-0.52984
