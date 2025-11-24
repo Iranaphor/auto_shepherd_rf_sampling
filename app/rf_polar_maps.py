@@ -798,7 +798,7 @@ def main():
 
     # 0) Construct yaml file
     print(f"[CVS] Updated yaml to match data in {csv_path}.")
-    generate_points_yaml(csv_path, yaml_path, centre)
+    generate_points_yaml(csv_path, yaml_path, center)
 
     # 1) Load YAML
     center_lat, center_lon, points = load_yaml_points(yaml_path)
