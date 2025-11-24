@@ -41,3 +41,4 @@ ENV DATA_PATH=/data
 
 # By default, run python3 (you can override the script in docker-compose)
 CMD ["python3", "/app/rf_polar_maps.py"]
+#CMD ["python3", "/app/test_perms.py"]

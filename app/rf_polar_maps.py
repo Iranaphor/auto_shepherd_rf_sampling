@@ -588,6 +588,169 @@ def plot_heatmap_with_boundaries(angles_deg, radii_m, heatmap,
     print(f"Saved {out_path}")
 
 
+
+def _points_to_local_xy(points, center_lat, center_lon):
+    """Convert [lat, lon, v] points into (x, y, v) in local meters."""
+    local = []
+    for lat, lon, v in points:
+        x, y = latlon_to_local_xy(lat, lon, center_lat, center_lon)
+        local.append((x, y, v))
+    return local
+
+
+def _compute_xy_extent(polygons, local_points=None, margin_factor=0.05):
+    """Compute plot extents from polygons and optional points."""
+    xs, ys = [], []
+
+    for poly, _cat in polygons:
+        bx_min, by_min, bx_max, by_max = poly.bounds
+        xs.extend([bx_min, bx_max])
+        ys.extend([by_min, by_max])
+
+    if local_points:
+        for x, y, _v in local_points:
+            xs.append(x)
+            ys.append(y)
+
+    if not xs or not ys:
+        # Fallback
+        return (-10, 10, -10, 10)
+
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+
+    # Add a small margin
+    dx = x_max - x_min
+    dy = y_max - y_min
+    mx = dx * margin_factor if dx > 0 else 1.0
+    my = dy * margin_factor if dy > 0 else 1.0
+
+    return (x_min - mx, x_max + mx, y_min - my, y_max + my)
+
+
+def _render_xy_scene(
+    polygons,
+    local_points,
+    show_fill=True,
+    show_edges=True,
+    show_rf=False,
+    title="",
+    out_path="xy_plot.png"
+):
+    """
+    Internal renderer for XY plane.
+
+    polygons   : list of (Polygon in local XY, category_str)
+    local_points : list of (x, y, v) in local XY
+    show_fill  : fill polygons with CATEGORY_COLORS
+    show_edges : draw polygon edges
+    show_rf    : scatter RF points coloured by v
+    """
+    # Compute extents
+    x_min, x_max, y_min, y_max = _compute_xy_extent(polygons, local_points)
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Draw polygons
+    for poly, cat in polygons:
+        color = CATEGORY_COLORS.get(cat, CATEGORY_COLORS.get("unknown", "#cccccc"))
+        x, y = poly.exterior.xy
+
+        if show_fill:
+            ax.fill(x, y, facecolor=color, edgecolor="none", alpha=0.8)
+        if show_edges:
+            ax.plot(x, y, color="black", linewidth=0.7)
+
+    # RF overlay
+    if show_rf and local_points:
+        xs = [p[0] for p in local_points]
+        ys = [p[1] for p in local_points]
+        vs = [p[2] for p in local_points]
+
+        sc = ax.scatter(xs, ys, c=vs, s=10, alpha=0.8)
+        cbar = fig.colorbar(sc, ax=ax)
+        cbar.set_label("Value (v)")
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
+    ax.set_xlabel("X (m, local)")
+    ax.set_ylabel("Y (m, local)")
+    ax.set_title(title)
+
+    # Optional legend for obstacle colours
+    import matplotlib.patches as mpatches
+    labels = ["open", "trees", "building", "lake", "unknown"]
+    patches = []
+    for lab in labels:
+        if lab in CATEGORY_COLORS:
+            patches.append(
+                mpatches.Patch(color=CATEGORY_COLORS[lab], label=lab)
+            )
+    if patches:
+        ax.legend(handles=patches, loc="upper right", fontsize="small", frameon=True)
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+    print(f"Saved {out_path}")
+
+
+
+def plot_xy_obstacle_map(polygons, out_path="xy_obstacle_map.png"):
+    """
+    XY-plane obstacle map: filled polygons in their obstacle colours.
+    """
+    _render_xy_scene(
+        polygons=polygons,
+        local_points=None,
+        show_fill=True,
+        show_edges=True,
+        show_rf=False,
+        title="Obstacle map (XY plane)",
+        out_path=out_path,
+    )
+
+def plot_xy_obstacle_boundaries_with_rf(
+    polygons, points, center_lat, center_lon,
+    out_path="xy_obstacle_boundaries_rf.png"
+):
+    """
+    XY-plane: polygon boundaries in black, RF points overlaid as coloured scatter.
+    """
+    local_points = _points_to_local_xy(points, center_lat, center_lon)
+
+    _render_xy_scene(
+        polygons=polygons,
+        local_points=local_points,
+        show_fill=False,   # no fills, just edges
+        show_edges=True,
+        show_rf=True,
+        title="Obstacle boundaries + RF overlay (XY plane)",
+        out_path=out_path,
+    )
+
+def plot_xy_obstacles_with_rf(
+    polygons, points, center_lat, center_lon,
+    out_path="xy_obstacles_rf.png"
+):
+    """
+    XY-plane: filled obstacle polygons plus RF points overlaid as coloured scatter.
+    """
+    local_points = _points_to_local_xy(points, center_lat, center_lon)
+
+    _render_xy_scene(
+        polygons=polygons,
+        local_points=local_points,
+        show_fill=True,
+        show_edges=True,
+        show_rf=True,
+        title="Obstacle map + RF overlay (XY plane)",
+        out_path=out_path,
+    )
+
+
+
 # =========================
 # MAIN
 # =========================
@@ -619,8 +782,32 @@ def main():
         polygons, max_range, DTHETA_DEG, DR_M
     )
 
+    plot_xy_obstacle_map(
+        polygons,
+        out_path=os.path.join(path, "xy_obstacle_map.png")
+    )
+    plot_xy_obstacle_boundaries_with_rf(
+        polygons,
+        points,
+        center_lat,
+        center_lon,
+        out_path=os.path.join(path, "xy_obstacle_boundaries_rf.png")
+    )
+    plot_xy_obstacles_with_rf(
+        polygons,
+        points,
+        center_lat,
+        center_lon,
+        out_path=os.path.join(path, "xy_obstacles_rf.png")
+    )
+
+
     # 5) Plot obstacle polar map
-    plot_obstacle_grid(angles_deg, radii_m, obstacle_grid, os.path.join(path, "obstacles_polar.png"))
+    plot_obstacle_grid(angles_deg,
+        radii_m,
+        obstacle_grid,
+        os.path.join(path, "obstacles_polar.png")
+    )
 
     # 6) Build points heatmap in same grid
     heatmap = build_points_heatmap(
