@@ -29,8 +29,8 @@ services:
       - DATA_PATH=/data/riseholme_south
       - CENTER_LAT=53.26831
       - CENTER_LON=-0.52984
-      - ANGULAR_BIN_SIZE=10.0
-      - RADIAL_BIN_SIZE=10.0
+      - ANGULAR_BIN_SIZE=30.0
+      - RADIAL_BIN_SIZE=20.0
 
     #Execute command
     command: ["python3", "/app/rf_polar_maps.py"]
@@ -72,10 +72,29 @@ services:
     #       - our context of signatures is not important now
     #       - orienteering problem (informative path planning)
     #       - we want to generate a path where nodes/edges give one-time rewards
+    #       - so lets say thats implemented and wow it works
+    #       - generate image of desired path over environment
+    #       - generate image of expected obstacle signatures
+    #       - generate image of expected obstacle signature set
     #  /app/extend_dataset.py
+    #     - read in rf data
+    #     - read in obstacle map
+    #     - convert obstacle map and rf data into polar maps
+    #     - get unique set of obstacle signatures
+    #     - associate obstacle signature to rf signature
+    #     - read in existing rf-signature data
+    #     - extend the existing rf with the new rf data 
+    #     - generate before and after signature-rf pairs images
     #  /app/predict_rf_dropoff.py
+    #     - read in rf-signature dataset
+    #     - read in xy obstacle map
+    #     - open interactive image
+    #     - click on 2 points
+    #     - generate expected dropoff graph
 
 
+    # What i wuld like to do first though:
+    #    - setup a class for generating images from [rf/obstacle]/[xy/polar] maps
 
 
 

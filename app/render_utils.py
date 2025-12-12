@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# ###########################################################################
+# Rendering utilities for obstacle and RF visualization
+#
+# @author      James R. Heselden (github: iranaphor)
+# @maintainer  James R. Heselden (github: iranaphor)
+# @datecreated 12th December 2025
+# ###########################################################################
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.colors import ListedColormap, BoundaryNorm
+from config import CATEGORY_COLORS, OBSTACLE_CODES
+
+
+# =========================
+# SHARED STYLING
+# =========================
+
+def get_default_figsize(aspect='landscape'):
+    """Return consistent figure sizes."""
+    if aspect == 'square':
+        return (8, 8)
+    elif aspect == 'wide':
+        return (12, 6)
+    elif aspect == 'tall':
+        return (6, 12)
+    else:  # landscape
+        return (10, 6)
+
+
+def get_default_dpi():
+    """Return consistent DPI for all plots."""
+    return 200
+
+
+def apply_plot_styling(ax, xlabel="", ylabel="", title=""):
+    """Apply consistent styling to matplotlib axes."""
+    if xlabel:
+        ax.set_xlabel(xlabel, fontsize=10)
+    if ylabel:
+        ax.set_ylabel(ylabel, fontsize=10)
+    if title:
+        ax.set_title(title, fontsize=12)
+    ax.grid(False)
+
+
+# =========================
+# COLORMAP UTILITIES
+# =========================
+
+def get_obstacle_colormap(categories=None):
+    """
+    Return a categorical colormap for obstacles.
+    
+    categories: optional list of category names in order
+                defaults to ["unknown", "open", "lake", "trees", "building"]
+    """
+    if categories is None:
+        categories = ["unknown", "open", "lake", "trees", "building"]
+    
+    colors = [CATEGORY_COLORS.get(cat, "#cccccc") for cat in categories]
+    cmap = ListedColormap(colors)
+    bounds = np.arange(len(categories) + 1) - 0.5
+    norm = BoundaryNorm(bounds, cmap.N)
+    
+    return cmap, norm, categories
+
+
+def get_obstacle_legend_patches():
+    """Return legend patches for obstacle categories."""
+    labels = ["unknown", "open", "lake", "trees", "building"]
+    patches = [
+        mpatches.Patch(color=CATEGORY_COLORS[lab], label=lab)
+        for lab in labels if lab in CATEGORY_COLORS
+    ]
+    return patches
+
+
+# =========================
+# EXTENT COMPUTATION
+# =========================
+
+def compute_xy_extent(polygons, local_points=None, margin_factor=0.05):
+    """
+    Compute plot extents from polygons and optional points.
+    
+    Returns: (x_min, x_max, y_min, y_max)
+    """
+    xs, ys = [], []
+
+    for poly, _cat in polygons:
+        bx_min, by_min, bx_max, by_max = poly.bounds
+        xs.extend([bx_min, bx_max])
+        ys.extend([by_min, by_max])
+
+    if local_points:
+        for x, y, _v in local_points:
+            xs.append(x)
+            ys.append(y)
+
+    if not xs or not ys:
+        return (-10, 10, -10, 10)
+
+    x_min, x_max = min(xs), max(xs)
+    y_min, y_max = min(ys), max(ys)
+
+    dx = x_max - x_min
+    dy = y_max - y_min
+    mx = dx * margin_factor if dx > 0 else 1.0
+    my = dy * margin_factor if dy > 0 else 1.0
+
+    return (x_min - mx, x_max + mx, y_min - my, y_max + my)
+
+
+def compute_polar_extent(radii_m, angles_deg=None):
+    """
+    Compute polar plot extents.
+    
+    Returns: (r_max, theta_min, theta_max)
+    """
+    if len(radii_m) > 1:
+        dr = radii_m[1] - radii_m[0]
+    else:
+        dr = radii_m[0] * 2.0 if len(radii_m) == 1 else 1.0
+    
+    r_max = radii_m[-1] + dr / 2.0
+    theta_min, theta_max = 0.0, 360.0
+    
+    return r_max, theta_min, theta_max
+
+
+# =========================
+# DRAWING HELPERS
+# =========================
+
+def draw_polygons_xy(ax, polygons, show_fill=True, show_edges=True, alpha=0.8):
+    """Draw polygons on XY axes."""
+    for poly, cat in polygons:
+        color = CATEGORY_COLORS.get(cat, CATEGORY_COLORS.get("unknown", "#cccccc"))
+        x, y = poly.exterior.xy
+
+        if show_fill:
+            ax.fill(x, y, facecolor=color, edgecolor="none", alpha=alpha)
+        if show_edges:
+            ax.plot(x, y, color="black", linewidth=0.7)
+
+
+def draw_rf_scatter(ax, local_points, s=10, alpha=0.8, cmap='viridis'):
+    """Draw RF data points as colored scatter."""
+    xs = [p[0] for p in local_points]
+    ys = [p[1] for p in local_points]
+    vs = [p[2] for p in local_points]
+
+    sc = ax.scatter(xs, ys, c=vs, s=s, alpha=alpha, cmap=cmap)
+    return sc
+
+
+def add_colorbar(fig, mappable, ax, label=""):
+    """Add a colorbar with consistent styling."""
+    cbar = fig.colorbar(mappable, ax=ax)
+    if label:
+        cbar.set_label(label, fontsize=10)
+    return cbar
+
+
+def add_legend(ax, location="upper right", fontsize="small"):
+    """Add obstacle category legend to axes."""
+    patches = get_obstacle_legend_patches()
+    if patches:
+        ax.legend(handles=patches, loc=location, fontsize=fontsize, frameon=True)
+
+
+# =========================
+# GRID CONVERSION
+# =========================
+
+def obstacle_grid_to_numeric(obstacle_grid, categories=None):
+    """
+    Convert obstacle grid (object dtype with category strings)
+    to numeric grid for plotting.
+    
+    Returns: numeric_grid, categories_list
+    """
+    if categories is None:
+        categories = ["open", "trees", "building", "lake", "unknown"]
+    
+    present = {c for c in obstacle_grid.flatten()}
+    categories = [c for c in categories if c in present]
+    
+    cat_to_idx = {c: i for i, c in enumerate(categories)}
+    numeric_grid = np.vectorize(cat_to_idx.get)(obstacle_grid)
+    
+    return numeric_grid, categories
+
+
+def signature_to_obstacle_grid(unique_sigs, n_r):
+    """
+    Convert signature strings to obstacle grid for visualization.
+    
+    Returns: (num_sigs, n_r) array with numeric obstacle codes
+    """
+    num_sigs = len(unique_sigs)
+    sig_obs_grid = np.full((num_sigs, n_r), np.nan, dtype=float)
+
+    for i, sig in enumerate(unique_sigs):
+        L = min(len(sig), n_r)
+        for j in range(L):
+            c = sig[j]
+            if c.isdigit():
+                sig_obs_grid[i, j] = int(c)
+
+    return sig_obs_grid
