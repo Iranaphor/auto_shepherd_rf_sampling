@@ -7,3 +7,9 @@
 # And not the test1 directory or its contents
 !/sample/
 !/sample/**
+
+!/riseholme_lake/
+!/riseholme_lake/**
+
+!/riseholme_south/
+!/riseholme_south/**

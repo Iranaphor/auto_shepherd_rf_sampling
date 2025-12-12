@@ -26,6 +26,60 @@ services:
 
     #Declare the environment variable $DATA_PATH
     environment:
-      - DATA_PATH=/data/sample
+      - DATA_PATH=/data/riseholme_south
       - CENTER_LAT=53.26831
       - CENTER_LON=-0.52984
+      - ANGULAR_BIN_SIZE=10.0
+      - RADIAL_BIN_SIZE=10.0
+
+    #Execute command
+    command: ["python3", "/app/rf_polar_maps.py"]
+
+
+
+    # 1. Generate a waypoint path to optimise data collection
+    # Takes in obstacle-map and base location and generates 
+    # a list of waypoints to optimise search through obstacle 
+    # signatures.
+    #command: ["python3", "/app/generate_search_route.py"]
+
+    # 2. Generate the signature associated dataset
+    # Using the obstacle map and the rf data, generate the
+    # polar graphs and contribute the provided rf data into
+    # the provided association graph.
+    #command: ["python3", "/app/extend_dataset.py"]
+
+    # 3. Predict peer-to-peer comms
+    # Using the association dataset and the new obstacle map
+    # for the new location, run a live system which will display
+    # the predicted dropoff graph between 2 points on an 
+    # interactive display.
+    #command: ["python3", "/app/predict_rf_dropoff.py"]
+
+
+
+    # What functionality / visualising do they share?
+    #  /app/generate_search_route.py
+    #     - obstacle map from kml
+    #       - generate (+save)
+    #     - generate grid
+    #       - calculate obstacle signature from each point to base
+    #       - for each 8-connected edge, make N subnodes
+    #       - count unique signatures over each subnode
+    #       - count unique signature over edge
+    #       - plot points over obstacle xy colouring points based on data potential
+    #       - now, we want to search the space to get as many unique collectibles
+    #       - our context of signatures is not important now
+    #       - orienteering problem (informative path planning)
+    #       - we want to generate a path where nodes/edges give one-time rewards
+    #  /app/extend_dataset.py
+    #  /app/predict_rf_dropoff.py
+
+
+
+
+
+
+
+
+
