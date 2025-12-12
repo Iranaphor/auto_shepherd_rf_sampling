@@ -3,22 +3,24 @@
 # ###########################################################################
 # KML parsing and loading utilities
 #
-# @author      James R. Heselden (github: iranaphor)
-# @maintainer  James R. Heselden (github: iranaphor)
+# @author      James R. Heselden (github: Iranaphor)
+# @maintainer  James R. Heselden (github: Iranaphor)
 # @datecreated 12th December 2025
+# @datemodified 12th December 2025
+# @credits     Developed with assistance from Claude Sonnet 4.5 and GitHub
+#              Copilot.
 # ###########################################################################
 
 import math
 import xml.etree.ElementTree as ET
+
 from shapely.geometry import Polygon
+
 from config import CATEGORY_COLORS
 
 
 def latlon_to_local_xy(lat, lon, lat0, lon0):
-    """
-    Approximate conversion from lat/lon (degrees) to local XY in meters
-    relative to (lat0, lon0) using a simple equirectangular approximation.
-    """
+    """Convert lat/lon to local XY in meters using equirectangular approximation."""
     R = 6378137.0  # meters
 
     dlat = math.radians(lat - lat0)
@@ -29,11 +31,8 @@ def latlon_to_local_xy(lat, lon, lat0, lon0):
     return x, y
 
 
-def classify_category(name_str: str) -> str:
-    """
-    Map a name string to one of our categories based on simple rules.
-    Adjust this if your KML uses different words.
-    """
+def classify_category(name_str):
+    """Map name string to obstacle category based on keyword rules."""
     s = (name_str or "").strip().lower()
 
     # exact matches
@@ -61,29 +60,20 @@ def classify_category(name_str: str) -> str:
 
 def load_kml_polygons(kml_path, center_lat, center_lon):
     """
-    Load polygons from a Google Earth KML using plain XML:
-
-    - Find all <Placemark>
-    - Skip placemarks with <visibility>0</visibility>
-    - Read <name> for category
-    - Read <Polygon>/<outerBoundaryIs>/<LinearRing>/<coordinates>
-    - Convert lon,lat to local XY, build shapely Polygons
-
-    Prints one debug line per polygon with name, type, colour, and bounds.
-    
-    Returns:
-        List of (shapely.Polygon in local XY, category_str) tuples
+    Load polygons from KML file and convert to local XY coordinates.
+    Skips placemarks with visibility=0. Returns list of (Polygon, category) tuples.
     """
 
     print(f"[KML] Parsing KML with ElementTree: {kml_path}")
     tree = ET.parse(kml_path)
     root = tree.getroot()
 
-    ns_any = "{*}"  # wildcard namespace
+    ns_any = "{*}"
     polygons = []
 
+    # Process each placemark in the KML file
     for pm in root.findall(".//{*}Placemark"):
-        # --- visibility check ---
+        # Check visibility flag
         vis_el = pm.find(f"{ns_any}visibility")
         if vis_el is not None and vis_el.text is not None:
             vis_text = vis_el.text.strip()
@@ -94,18 +84,18 @@ def load_kml_polygons(kml_path, center_lat, center_lon):
                 print(f"[KML]   Skipping Placemark '{pm_name}' due to visibility=0")
                 continue
 
-        # Name / category
+        # Extract name and classify category
         name_el = pm.find(f"{ns_any}name")
         name = (name_el.text.strip() if name_el is not None and name_el.text else "")
         category = classify_category(name)
         color = CATEGORY_COLORS.get(category, "#cccccc")
 
-        # Each Placemark may have one or more Polygon elements
+        # Process polygon elements within this placemark
         poly_elems = pm.findall(".//{*}Polygon")
         if not poly_elems:
-            # This placemark might be a Point, LineString, etc. – skip it
             continue
 
+        # Extract coordinates and build polygon
         for poly_el in poly_elems:
             coords_el = poly_el.find(".//{*}outerBoundaryIs/{*}LinearRing/{*}coordinates")
             if coords_el is None or coords_el.text is None:
