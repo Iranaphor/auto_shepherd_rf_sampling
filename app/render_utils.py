@@ -180,11 +180,21 @@ def signature_to_obstacle_grid(unique_sigs, n_r):
 
 
 def plot_signature_comparison(before_sigs, after_sigs, before_data, after_data,
-                               radii_m, out_path, title_prefix="Dataset"):
+                               radii_m, out_path, polygons, points, center_lat, center_lon,
+                               obstacles, title_prefix="Dataset"):
     """
     Plot before/after comparison of signature data.
-    Shows obstacle patterns and RF data side by side.
+    Shows XY map with obstacles/RF, obstacle patterns, and before/after RF data.
     """
+    # Build obstacle colormap from dataset
+    obstacle_colors = {}
+    obstacle_categories = []
+    for obs in obstacles:
+        obs_type = obs.get('type', 'unknown')
+        color = obs.get('rendering_colour', '#cccccc')
+        obstacle_colors[obs_type] = color
+        obstacle_categories.append(obs_type)
+    
     # Determine all unique signatures
     all_sigs = sorted(set(list(before_sigs.keys()) + list(after_sigs.keys())))
     num_sigs = len(all_sigs)
@@ -228,16 +238,61 @@ def plot_signature_comparison(before_sigs, after_sigs, before_data, after_data,
                 if val is not None and not (isinstance(val, float) and np.isnan(val)):
                     after_rf_grid[i, j] = val
     
-    # Create figure
-    fig, axes = plt.subplots(2, 2, figsize=(20, max(8, 0.3 * num_sigs)))
+    # Convert points to local XY coordinates
+    from kml_utils import latlon_to_local_xy
+    local_points = []
+    for point in points:
+        # Points are [lat, lon, value] lists
+        lat, lon, rf_val = point[0], point[1], point[2]
+        x, y = latlon_to_local_xy(lat, lon, center_lat, center_lon)
+        local_points.append((x, y, rf_val))
     
-    # Obstacle colormap
-    obs_cmap, obs_norm, _ = get_obstacle_colormap(
-        ["unknown", "open", "lake", "trees", "building"]
+    # Create figure with custom width ratios to make left column same width
+    fig = plt.figure(figsize=(20, max(8, 0.3 * num_sigs)))
+    gs = fig.add_gridspec(2, 2, width_ratios=[1, 1.5], hspace=0.3, wspace=0.3)
+    axes = [[fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])],
+            [fig.add_subplot(gs[1, 0]), fig.add_subplot(gs[1, 1])]]
+    
+    # Obstacle colormap from dataset
+    colors = [obstacle_colors.get(cat, '#cccccc') for cat in obstacle_categories]
+    obs_cmap = ListedColormap(colors)
+    bounds = np.arange(len(obstacle_categories) + 1) - 0.5
+    obs_norm = BoundaryNorm(bounds, obs_cmap.N)
+    
+    # Top left: XY map with obstacles and RF points
+    extent = compute_xy_extent(polygons, local_points)
+    axes[0][0].set_xlim(extent[0], extent[1])
+    axes[0][0].set_ylim(extent[2], extent[3])
+    axes[0][0].set_aspect('equal')
+    # Draw polygons with dataset colors
+    for poly, cat in polygons:
+        color = obstacle_colors.get(cat, '#cccccc')
+        x, y = poly.exterior.xy
+        axes[0][0].fill(x, y, facecolor=color, edgecolor="black", alpha=0.8, linewidth=0.7)
+    sc = draw_rf_scatter(axes[0][0], local_points, s=10, alpha=0.8, cmap='viridis')
+    apply_plot_styling(axes[0][0],
+                      xlabel="X (m)",
+                      ylabel="Y (m)",
+                      title="Obstacles and RF Points")
+    add_colorbar(fig, sc, axes[0][0], label="RF Value (dBm)")
+    
+    # Top right: before RF
+    im_before = axes[0][1].imshow(
+        before_rf_grid,
+        origin="lower",
+        aspect="auto",
+        extent=[0, r_max, 0, num_sigs],
+        interpolation="nearest"
     )
+    apply_plot_styling(axes[0][1],
+                      xlabel="Distance from base (m)",
+                      ylabel="Signature index",
+                      title=f"{title_prefix} - Before")
+    cbar_before = fig.colorbar(im_before, ax=axes[0][1])
+    cbar_before.set_label("RF Value")
     
-    # Top left: obstacles
-    im_obs = axes[0, 0].imshow(
+    # Bottom left: obstacle patterns
+    im_obs = axes[1][0].imshow(
         before_obs_grid,
         origin="lower",
         aspect="auto",
@@ -246,48 +301,26 @@ def plot_signature_comparison(before_sigs, after_sigs, before_data, after_data,
         norm=obs_norm,
         interpolation="nearest"
     )
-    apply_plot_styling(axes[0, 0],
+    apply_plot_styling(axes[1][0],
                       xlabel="Distance from base (m)",
                       ylabel="Signature index",
                       title="Obstacle Patterns")
     
-    # Top right: before RF
-    im_before = axes[0, 1].imshow(
-        before_rf_grid,
-        origin="lower",
-        aspect="auto",
-        extent=[0, r_max, 0, num_sigs],
-        interpolation="nearest"
-    )
-    apply_plot_styling(axes[0, 1],
-                      xlabel="Distance from base (m)",
-                      title=f"{title_prefix} - Before")
-    cbar_before = fig.colorbar(im_before, ax=axes[0, 1])
-    cbar_before.set_label("RF Value")
-    
-    # Bottom left: signature labels
-    axes[1, 0].axis('off')
-    sig_text = "\n".join([f"{i}: {sig}" for i, sig in enumerate(all_sigs[:50])])
-    if num_sigs > 50:
-        sig_text += f"\n... and {num_sigs - 50} more"
-    axes[1, 0].text(0.1, 0.5, sig_text, fontsize=6, family='monospace',
-                    verticalalignment='center')
-    
     # Bottom right: after RF
-    im_after = axes[1, 1].imshow(
+    im_after = axes[1][1].imshow(
         after_rf_grid,
         origin="lower",
         aspect="auto",
         extent=[0, r_max, 0, num_sigs],
         interpolation="nearest"
     )
-    apply_plot_styling(axes[1, 1],
+    apply_plot_styling(axes[1][1],
                       xlabel="Distance from base (m)",
+                      ylabel="Signature index",
                       title=f"{title_prefix} - After")
-    cbar_after = fig.colorbar(im_after, ax=axes[1, 1])
+    cbar_after = fig.colorbar(im_after, ax=axes[1][1])
     cbar_after.set_label("RF Value")
     
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=get_default_dpi())
+    fig.savefig(out_path, dpi=get_default_dpi(), bbox_inches='tight')
     plt.close(fig)
     print(f"[PLOT] Saved comparison to {out_path}")

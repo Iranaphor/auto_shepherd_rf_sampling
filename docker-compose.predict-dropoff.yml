@@ -27,36 +27,23 @@ services:
     #Declare the environment variables for extend_dataset.py and config.py
     environment:
       - DATA_PATH=/data/riseholme_lake
-      - DATASET_PATH=/data/dataset.yaml
-      - OUTPUT_PATH=/data/dataset_extended.yaml
-      - DTHETA=5.0
-      - DR=10.0
-      - MAX_RANGE=500.0
+      - DATASET_PATH=/data/dataset_extended.yaml
       - RF_TYPE=ssid-espnow
       - PLOT_OUTPUT=/data/riseholme_lake/dataset_comparison.png
-      - ANGULAR_BIN_SIZE=30.0
-      - RADIAL_BIN_SIZE=15.0
 
     #Execute command
-    command: ["python3", "/app/extend_dataset.py"]
+    command: ["python3", "/app/predict_dropoff.py"]
 
-    # 2. Generate the signature associated dataset
-    # Using the obstacle map and the rf data, generate the
-    # polar graphs and contribute the provided rf data into
-    # the provided association graph.
+    # 3. Predict peer-to-peer communications
+    # Using the association dataset and the new obstacle map
+    # for the new location, run a live system which will display
+    # the predicted dropoff graph between 2 points on an 
+    # interactive display.
 
-    #  /app/extend_dataset.py
-    #     - read in rf data
-    #     - read in obstacle map
-    #     - convert obstacle map and rf data into polar maps
-    #     - get unique set of obstacle signatures
-    #     - associate obstacle signature to rf signature
-    #     - read in existing rf-signature data
-    #     - extend the existing rf with the new rf data 
-    #     - generate before and after signature-rf pairs images
-
-
-
-
-
+    #  /app/predict_dropoff.py
+    #     - read in rf-signature dataset
+    #     - read in xy obstacle map
+    #     - open interactive image
+    #     - click on 2 points
+    #     - generate expected dropoff graph
 
