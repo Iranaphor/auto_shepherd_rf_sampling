@@ -16,7 +16,23 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.colors import ListedColormap, BoundaryNorm
 
-from config import CATEGORY_COLORS, OBSTACLE_CODES
+# Obstacle category colors for plotting
+CATEGORY_COLORS = {
+    "unknown":  "#cccccc",
+    "open":     "#ffffff",
+    "lake":     "#0066ff",
+    "trees":    "#00aa00",
+    "building": "#ff9900"
+}
+
+# Map obstacle categories to numeric codes
+OBSTACLE_CODES = {
+    "unknown": "0",
+    "open": "1",
+    "lake": "2",
+    "trees": "3",
+    "building": "4"
+}
 
 
 def get_default_figsize(aspect='landscape'):

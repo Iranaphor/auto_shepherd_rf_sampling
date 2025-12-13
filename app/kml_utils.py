@@ -16,7 +16,14 @@ import xml.etree.ElementTree as ET
 
 from shapely.geometry import Polygon
 
-from config import CATEGORY_COLORS
+# Obstacle category colors for plotting
+CATEGORY_COLORS = {
+    "unknown":  "#cccccc",
+    "open":     "#ffffff",
+    "lake":     "#0066ff",
+    "trees":    "#00aa00",
+    "building": "#ff9900"
+}
 
 
 def latlon_to_local_xy(lat, lon, lat0, lon0):
@@ -35,9 +42,9 @@ def classify_category(name_str):
     """Map name string to obstacle category based on keyword rules."""
     s = (name_str or "").strip().lower()
 
-    # exact matches
+    # exact matches - remap 'open' to 'unknown'
     if s in ("open", "open field", "open area", "field", "fields"):
-        return "open"
+        return "unknown"
     if s in ("tree", "trees", "wood", "woods", "forest"):
         return "trees"
     if s in ("building", "buildings", "barn", "shed", "house", "houses"):
@@ -45,7 +52,7 @@ def classify_category(name_str):
     if s in ("lake", "lakes", "pond", "ponds", "water", "waterbody", "water body"):
         return "lake"
 
-    # substring fallbacks
+    # substring fallbacks - remap 'open' to 'unknown'
     if "tree" in s:
         return "trees"
     if "build" in s or "barn" in s or "shed" in s or "house" in s:
@@ -53,7 +60,7 @@ def classify_category(name_str):
     if "lake" in s or "pond" in s or "water" in s:
         return "lake"
     if "open" in s or "field" in s or "pasture" in s:
-        return "open"
+        return "unknown"
 
     return "unknown"
 

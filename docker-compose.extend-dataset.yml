@@ -26,14 +26,14 @@ services:
 
     #Declare the environment variables for extend_dataset.py and config.py
     environment:
-      - DATA_PATH=/data/riseholme_lake
+      - DATA_PATH=/data/riseholme_south
       - DATASET_PATH=/data/dataset.yaml
       - OUTPUT_PATH=/data/dataset_extended.yaml
       - DTHETA=5.0
       - DR=10.0
       - MAX_RANGE=500.0
       - RF_TYPE=ssid-espnow
-      - PLOT_OUTPUT=/data/riseholme_lake/dataset_comparison.png
+      - PLOT_OUTPUT=/data/riseholme_south/dataset_comparison.png
       - ANGULAR_BIN_SIZE=30.0
       - RADIAL_BIN_SIZE=15.0
 

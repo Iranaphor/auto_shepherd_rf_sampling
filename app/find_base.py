@@ -15,8 +15,16 @@ from collections import defaultdict
 
 import numpy as np
 
-from config import OBSTACLE_CODES
 from utils import build_polar_obstacle_grid_for_center
+
+# Map obstacle categories to numeric codes
+OBSTACLE_CODES = {
+    "unknown": "0",
+    "open": "1",
+    "lake": "2",
+    "trees": "3",
+    "building": "4"
+}
 
 
 def select_top_sampling_locations(

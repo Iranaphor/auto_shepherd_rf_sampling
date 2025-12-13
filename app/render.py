@@ -14,7 +14,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from config import CATEGORY_COLORS
 from render_utils import (
     apply_plot_styling, add_colorbar, add_legend,
     compute_xy_extent, compute_polar_extent,
@@ -226,9 +225,9 @@ class Render:
 
 
     def render_signature_slices(self, unique_sigs, mean_slices, fileout):
-        """Render signature slices visualization as 2-panel plot.""" fileout: Output file path
+        """Render signature slices visualization as 2-panel plot." fileout: Output file path
         """
-        from config import DR_M
+        DEFAULT_DR_M = 10.0
 
         num_sigs, n_r = mean_slices.shape
 
@@ -236,7 +235,7 @@ class Render:
         if self._radii_m is not None and len(self._radii_m) > 0:
             radii_m = self._radii_m
         else:
-            radii_m = np.arange(n_r) * DR_M
+            radii_m = np.arange(n_r) * DEFAULT_DR_M
 
         if len(radii_m) > 1:
             dr = radii_m[1] - radii_m[0]
