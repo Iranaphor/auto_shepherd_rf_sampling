@@ -17,23 +17,31 @@ services:
 
     # Run container processes as the same UID:GID as the host user
     user: "${UID}:${GID}"
+    
+    # Use host network for X11 display
+    network_mode: host
 
     # Mount local ./data directory into /data in the container
     # Mount local ./src directory into /src in the container
+    # Mount X11 socket for interactive display
     volumes:
       - ./data:/data
       - ./app:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
     #Declare the environment variable $DATA_PATH
     environment:
       - DATA_PATH=/data/riseholme_lake
       - CENTER_LAT=53.26831
       - CENTER_LON=-0.52984
-      - ANGULAR_BIN_SIZE=30.0
+      - GRID_SPACING=50.0
+      - NUM_SUBNODES=3
+      - ANGULAR_BIN_SIZE=10.0
       - RADIAL_BIN_SIZE=20.0
+      - MAX_RANGE_M=500.0
 
     #Execute command
-    command: ["python3", "/app/generate_search_route.py"]
+    command: ["python3", "-u", "/app/generate_search_route.py"]
 
 
     # 1. Generate a waypoint path to optimise data collection
