@@ -41,6 +41,7 @@ services:
     # a list of waypoints to optimise search through obstacle 
     # signatures.
 
+
     #  /app/generate_search_route.py
     #     - obstacle map from kml
     #       - generate (+save)
@@ -58,4 +59,3 @@ services:
     #       - generate image of desired path over environment
     #       - generate image of expected obstacle signatures
     #       - generate image of expected obstacle signature set
-

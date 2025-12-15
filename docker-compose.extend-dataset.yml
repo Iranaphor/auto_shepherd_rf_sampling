@@ -1,0 +1,62 @@
+# ###########################################################################
+#
+# @author      James R. Heselden (github: iranaphor)
+# @maintainer  James R. Heselden (github: iranaphor)
+# @datecreated 12th December 2025
+# @credits     Code structure and implementation were developed by the
+#              author with assistance from OpenAI's GPT-5.1 model, used
+#              under the author's direction and supervision.
+#
+# ###########################################################################
+
+services:
+  app:
+
+    # Build locally running the dockerfile relative to the context of the cwd
+    build: .
+
+    # Run container processes as the same UID:GID as the host user
+    user: "${UID}:${GID}"
+
+    # Mount local ./data directory into /data in the container
+    # Mount local ./src directory into /src in the container
+    volumes:
+      - ./data:/data
+      - ./app:/app
+
+    #Declare the environment variables for extend_dataset.py and config.py
+    environment:
+      - DATA_PATH=/data/riseholme_south
+      - DATASET_PATH=/data/dataset.yaml
+      - OUTPUT_PATH=/data/dataset_extended.yaml
+      - DTHETA=5.0
+      - DR=10.0
+      - MAX_RANGE=500.0
+      - RF_TYPE=ssid-espnow
+      - PLOT_OUTPUT=/data/riseholme_south/dataset_comparison.png
+      - ANGULAR_BIN_SIZE=30.0
+      - RADIAL_BIN_SIZE=15.0
+
+    #Execute command
+    command: ["python3", "/app/extend_dataset.py"]
+
+    # 2. Generate the signature associated dataset
+    # Using the obstacle map and the rf data, generate the
+    # polar graphs and contribute the provided rf data into
+    # the provided association graph.
+
+    #  /app/extend_dataset.py
+    #     - read in rf data
+    #     - read in obstacle map
+    #     - convert obstacle map and rf data into polar maps
+    #     - get unique set of obstacle signatures
+    #     - associate obstacle signature to rf signature
+    #     - read in existing rf-signature data
+    #     - extend the existing rf with the new rf data 
+    #     - generate before and after signature-rf pairs images
+
+
+
+
+
+

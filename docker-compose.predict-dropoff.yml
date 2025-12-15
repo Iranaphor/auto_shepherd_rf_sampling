@@ -1,0 +1,54 @@
+# ###########################################################################
+#
+# @author      James R. Heselden (github: iranaphor)
+# @maintainer  James R. Heselden (github: iranaphor)
+# @datecreated 12th December 2025
+# @credits     Code structure and implementation were developed by the
+#              author with assistance from OpenAI's GPT-5.1 model, used
+#              under the author's direction and supervision.
+#
+# ###########################################################################
+
+services:
+  app:
+
+    # Build locally running the dockerfile relative to the context of the cwd
+    build: .
+
+    # Run container processes as the same UID:GID as the host user
+    user: "${UID}:${GID}"
+    
+    # Use host network for X11 display
+    network_mode: host
+
+    # Mount local ./data directory into /data in the container
+    # Mount local ./src directory into /src in the container
+    # Mount X11 socket for interactive display
+    volumes:
+      - ./data:/data
+      - ./app:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+
+    #Declare the environment variables for extend_dataset.py and config.py
+    environment:
+      - DATA_PATH=/data/riseholme_north
+      - DATASET_PATH=/data/dataset_extended.yaml
+      - RF_TYPE=ssid-espnow
+      - DISPLAY=${DISPLAY}
+
+    #Execute command
+    command: ["python3", "/app/predict_dropoff.py"]
+
+    # 3. Predict peer-to-peer communications
+    # Using the association dataset and the new obstacle map
+    # for the new location, run a live system which will display
+    # the predicted dropoff graph between 2 points on an 
+    # interactive display.
+
+    #  /app/predict_dropoff.py
+    #     - read in rf-signature dataset
+    #     - read in xy obstacle map
+    #     - open interactive image
+    #     - click on 2 points
+    #     - generate expected dropoff graph
+

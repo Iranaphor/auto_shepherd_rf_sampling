@@ -1,58 +1,58 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ###########################################################################
+# Utility functions for RF sampling and obstacle analysis
 #
 # @author      James R. Heselden (github: iranaphor)
 # @maintainer  James R. Heselden (github: iranaphor)
-# @datecreated 27st November 2025
-# @credits     Code structure and implementation were developed by the
-#              author with assistance from OpenAI's GPT-5.1 model, used
-#              under the author's direction and supervision.
-#
+# @datecreated 27th November 2025
 # ###########################################################################
 
 import os
 import csv
 import math
 import yaml
-import time
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
+from matplotlib.colors import ListedColormap, to_rgba
+import matplotlib.patches as mpatches
+from matplotlib.patches import Circle
 
-from fastkml import kml
-from shapely.geometry import Polygon, MultiPolygon, Point
-from collections import Counter
+from shapely.geometry import Point
 from collections import defaultdict
-from matplotlib.colors import ListedColormap
-import matplotlib.patches as mpatches
-from matplotlib.patches import Circle
 
-from matplotlib.colors import ListedColormap
-import matplotlib.patches as mpatches
-from matplotlib.patches import Circle
+from kml_utils import latlon_to_local_xy, load_kml_polygons
 
-from config import *
+# Default bin sizes (can be overridden by dataset)
+DEFAULT_DTHETA_DEG = 5.0
+DEFAULT_DR_M = 10.0
+
+# Obstacle category colors for plotting
+CATEGORY_COLORS = {
+    "unknown":  "#cccccc",
+    "open":     "#ffffff",
+    "lake":     "#0066ff",
+    "trees":    "#00aa00",
+    "building": "#ff9900"
+}
+
+# Map obstacle categories to numeric codes
+OBSTACLE_CODES = {
+    "unknown": "0",
+    "open": "1",
+    "lake": "2",
+    "trees": "3",
+    "building": "4"
+}
+
 
 # =========================
-# HELPER FUNCTIONS
+# DATA LOADING
 # =========================
-
-def latlon_to_local_xy(lat, lon, lat0, lon0):
-    """
-    Approximate conversion from lat/lon (degrees) to local XY in meters
-    relative to (lat0, lon0) using a simple equirectangular approximation.
-    """
-    R = 6378137.0  # meters
-
-    dlat = math.radians(lat - lat0)
-    dlon = math.radians(lon - lon0)
-
-    x = R * dlon * math.cos(math.radians(lat0))
-    y = R * dlat
-    return x, y
-
 
 def load_yaml_points(yaml_path):
+    """Load RF data points from YAML file."""
     with open(yaml_path, "r") as f:
         data = yaml.safe_load(f)
 
@@ -62,124 +62,41 @@ def load_yaml_points(yaml_path):
     return center_lat, center_lon, points
 
 
-import xml.etree.ElementTree as ET
-from collections import Counter
-from shapely.geometry import Polygon
+def generate_points_yaml(csv_path, yaml_path, center):
+    """Generate YAML points file from CSV data."""
+    if not os.path.exists(csv_path):
+        print('[CSV] file does not exist')
+        return
 
-def classify_category(name_str: str) -> str:
-    """
-    Map a name string to one of our categories based on simple rules.
-    Adjust this if your KML uses different words.
-    """
-    s = (name_str or "").strip().lower()
+    with open(csv_path, newline="") as csvfile, open(yaml_path, "w") as yamlfile:
+        reader = csv.reader(csvfile)
 
-    # exact matches
-    if s in ("open", "open field", "open area", "field", "fields"):
-        return "open"
-    if s in ("tree", "trees", "wood", "woods", "forest"):
-        return "trees"
-    if s in ("building", "buildings", "barn", "shed", "house", "houses"):
-        return "building"
-    if s in ("lake", "lakes", "pond", "ponds", "water", "waterbody", "water body"):
-        return "lake"
+        # Header comments
+        yamlfile.write("# ----------------------\n")
+        yamlfile.write("# YAML\n")
+        yamlfile.write("#\n")
+        yamlfile.write("# ----------------------\n")
 
-    # substring fallbacks
-    if "tree" in s:
-        return "trees"
-    if "build" in s or "barn" in s or "shed" in s or "house" in s:
-        return "building"
-    if "lake" in s or "pond" in s or "water" in s:
-        return "lake"
-    if "open" in s or "field" in s or "pasture" in s:
-        return "open"
+        # Center line
+        yamlfile.write(f"center: [{center[0]}, {center[1]}]\n")
+        yamlfile.write("gps_coords_xyv:\n")
 
-    return "unknown"
-
-
-def load_kml_polygons(kml_path, center_lat, center_lon):
-    """
-    Load polygons from a Google Earth KML using plain XML:
-
-    - Find all <Placemark>
-    - Skip placemarks with <visibility>0</visibility>
-    - Read <name> for category
-    - Read <Polygon>/<outerBoundaryIs>/<LinearRing>/<coordinates>
-    - Convert lon,lat to local XY, build shapely Polygons
-
-    Prints one debug line per polygon with name, type, colour, and bounds.
-    """
-
-    print(f"[KML] Parsing KML with ElementTree: {kml_path}")
-    tree = ET.parse(kml_path)
-    root = tree.getroot()
-
-    ns_any = "{*}"  # wildcard namespace
-    polygons = []
-
-    for pm in root.findall(".//{*}Placemark"):
-        # --- visibility check ---
-        vis_el = pm.find(f"{ns_any}visibility")
-        if vis_el is not None and vis_el.text is not None:
-            vis_text = vis_el.text.strip()
-            # Google Earth uses 0/1; treat '0' as hidden
-            if vis_text == "0":
-                pm_name_el = pm.find(f"{ns_any}name")
-                pm_name = pm_name_el.text.strip() if (pm_name_el is not None and pm_name_el.text) else ""
-                print(f"[KML]   Skipping Placemark '{pm_name}' due to visibility=0")
+        # Each row is [v, x, y, d, f]
+        for row in reader:
+            # skip empty lines
+            if not row or all(cell.strip() == "" for cell in row):
                 continue
 
-        # Name / category
-        name_el = pm.find(f"{ns_any}name")
-        name = (name_el.text.strip() if name_el is not None and name_el.text else "")
-        category = classify_category(name)
-        color = CATEGORY_COLORS.get(category, "#cccccc")
+            v = float(row[0])
+            x = float(row[1])
+            y = float(row[2])
 
-        # Each Placemark may have one or more Polygon elements
-        poly_elems = pm.findall(".//{*}Polygon")
-        if not poly_elems:
-            # This placemark might be a Point, LineString, etc. – skip it
-            continue
+            yamlfile.write(f"  -  [{x}, {y}, {v}]\n")
 
-        for poly_el in poly_elems:
-            coords_el = poly_el.find(".//{*}outerBoundaryIs/{*}LinearRing/{*}coordinates")
-            if coords_el is None or not coords_el.text or not coords_el.text.strip():
-                print(f"[KML]   Placemark '{name}' has Polygon but no coordinates – skipping")
-                continue
 
-            coord_strings = coords_el.text.strip().split()
-            xy_coords = []
-            for cs in coord_strings:
-                parts = cs.split(",")
-                if len(parts) < 2:
-                    continue
-                try:
-                    lon = float(parts[0])
-                    lat = float(parts[1])
-                except ValueError:
-                    continue
-                x, y = latlon_to_local_xy(lat, lon, center_lat, center_lon)
-                xy_coords.append((x, y))
-
-            if len(xy_coords) < 3:
-                print(f"[KML]   Placemark '{name}' polygon has <3 valid coords – skipping")
-                continue
-
-            poly = Polygon(xy_coords)
-            idx = len(polygons)
-            polygons.append((poly, category))
-
-            print(
-                f"[KML]   Polygon {idx}: "
-                f"name='{name}', "
-                f"category='{category}', "
-                f"color='{color}', "
-                f"bounds={poly.bounds}"
-            )
-
-    counts = Counter(cat for _, cat in polygons)
-    print(f"[KML] Loaded {len(polygons)} polygons by category: {dict(counts)}")
-
-    return polygons
+# =========================
+# POLAR GRID OPERATIONS
+# =========================
 
 def compute_max_range(polygons, center_lat, center_lon, points):
     """
@@ -249,6 +166,45 @@ def build_polar_grid(polygons, max_range_m, dtheta_deg, dr_m):
     return angles_deg, radii_m, obstacle_grid
 
 
+def build_polar_obstacle_grid_for_center(polygons, center_x, center_y,
+                                         angles_deg, radii_m):
+    """
+    Build a polar obstacle grid around an arbitrary XY centre.
+
+    polygons   : list of (shapely Polygon in local XY, category_str)
+    center_x,y : base station location in that same XY frame
+    angles_deg : list/array of angle bin centres in degrees (0..360)
+    radii_m    : list/array of radius bin centres in metres
+
+    Returns:
+        obstacle_grid_center : (n_theta, n_r) array of category strings
+    """
+    n_theta = len(angles_deg)
+    n_r = len(radii_m)
+
+    obstacle_grid_center = np.empty((n_theta, n_r), dtype=object)
+    obstacle_grid_center[:] = "unknown"
+
+    shapely_polys = [(poly, cat) for (poly, cat) in polygons]
+
+    for ith, theta_deg in enumerate(angles_deg):
+        theta_rad = np.deg2rad(theta_deg)
+        cos_t = np.cos(theta_rad)
+        sin_t = np.sin(theta_rad)
+
+        for jr, r in enumerate(radii_m):
+            x = center_x + r * cos_t
+            y = center_y + r * sin_t
+            pt = Point(x, y)
+
+            for poly, cat in shapely_polys:
+                if poly.contains(pt):
+                    obstacle_grid_center[ith, jr] = cat
+                    break
+
+    return obstacle_grid_center
+
+
 def build_points_heatmap(points, center_lat, center_lon,
                          angles_deg, radii_m, dtheta_deg, dr_m, max_range_m):
     """
@@ -289,11 +245,14 @@ def build_points_heatmap(points, center_lat, center_lon,
     return heatmap
 
 
+# =========================
+# SIGNATURE ANALYSIS
+# =========================
+
 def compute_obstacle_signatures_and_slices(obstacle_grid, heatmap):
     """
-    For each angle row (ray) in obstacle_grid, build a signature string
-    like '00001110101233' using OBSTACLE_CODES, then group rays with the
-    same signature and average their heatmap values over angle.
+    For each angle row (ray) in obstacle_grid, build a signature string,
+    then group rays with the same signature and average their heatmap values.
 
     Returns:
         unique_sigs : list[str]  # sorted unique signature strings
@@ -335,480 +294,7 @@ def compute_obstacle_signatures_and_slices(obstacle_grid, heatmap):
 
     return unique_sigs, mean_slices, counts
 
-from matplotlib.colors import ListedColormap, BoundaryNorm
 
-def plot_signature_slices(radii_m, unique_sigs, mean_slices, out_path):
-    """
-    Two-panel plot:
-      - Left: obstacle patterns per signature (categorical colours)
-      - Right: averaged RF value per signature (heatmap)
-
-    Both share the same y-axis (signature index), so rows are aligned.
-    """
-    num_sigs, n_r = mean_slices.shape
-
-    if len(radii_m) > 1:
-        dr = radii_m[1] - radii_m[0]
-    else:
-        dr = DR_M
-    r_max = radii_m[-1] + dr / 2.0
-
-    # ------------------------------------------------------------------
-    # Build obstacle grid from signature strings
-    # Each signature is like "00001110101233" (chars are codes 0..4)
-    # ------------------------------------------------------------------
-    sig_obs_grid = np.full((num_sigs, n_r), np.nan, dtype=float)
-
-    for i, sig in enumerate(unique_sigs):
-        # Truncate or pad to the number of radius bins
-        L = min(len(sig), n_r)
-        for j in range(L):
-            c = sig[j]
-            if c.isdigit():
-                sig_obs_grid[i, j] = int(c)
-
-    # Categorical colormap for obstacles (0=open,1=trees,2=building,3=lake,4=unknown)
-    obs_colors = [
-        CATEGORY_COLORS["unknown"],
-        CATEGORY_COLORS["open"],
-        CATEGORY_COLORS["lake"],
-        CATEGORY_COLORS["trees"],
-        CATEGORY_COLORS["building"],
-    ]
-    obs_cmap = ListedColormap(obs_colors)
-    bounds = [-0.5, 0.5, 1.5, 2.5, 3.5, 4.5]
-    norm = BoundaryNorm(bounds, obs_cmap.N)
-
-    # ------------------------------------------------------------------
-    # Create side-by-side subplots
-    # ------------------------------------------------------------------
-    fig, (ax_obs, ax_val) = plt.subplots(
-        1, 2,
-        figsize=(30, max(4, 0.25 * num_sigs)),
-        sharey=True
-    )
-
-    # Left: obstacle patterns
-    im_obs = ax_obs.imshow(
-        sig_obs_grid,
-        origin="lower",
-        aspect="auto",
-        extent=[0, r_max, 0, num_sigs],
-        cmap=obs_cmap,
-        norm=norm,
-        interpolation="nearest"
-    )
-    ax_obs.set_xlabel("Distance from base (m)")
-    ax_obs.set_ylabel("Obstacle signature (sorted index)")
-    ax_obs.set_title("Obstacle pattern per signature")
-
-    # Build a small legend for obstacle colours
-    import matplotlib.patches as mpatches
-    labels = ["unknown", "open", "lake", "trees", "building"]
-    patches = [
-        mpatches.Patch(color=CATEGORY_COLORS[l], label=l)
-        for l in labels
-    ]
-    ax_obs.legend(
-        handles=patches,
-        loc="upper right",
-        fontsize="small",
-        frameon=True
-    )
-
-    # Right: mean RF values
-    im_val = ax_val.imshow(
-        mean_slices,
-        origin="lower",
-        aspect="auto",
-        extent=[0, r_max, 0, num_sigs],
-        interpolation="nearest"
-    )
-    cbar = fig.colorbar(im_val, ax=ax_val)
-    cbar.set_label("Mean value (v)")
-
-    ax_val.set_xlabel("Distance from base (m)")
-    ax_val.set_title("Mean RF per signature")
-
-    # Y tick labels: show signatures if there aren't too many
-    max_labels = 20
-    if num_sigs <= max_labels:
-        yticks = np.arange(num_sigs) + 0.5
-        # Truncate long signature strings for readability
-        labels_sig = []
-        for s in unique_sigs:
-            if len(s) <= 20:
-                labels_sig.append(s)
-            else:
-                labels_sig.append(s[:8] + "…" + s[-4:])
-        ax_obs.set_yticks(yticks)
-        ax_obs.set_yticklabels(labels_sig)
-        ax_val.set_yticks(yticks)
-        ax_val.set_yticklabels([])  # no duplicate labels on right
-    else:
-        yticks = np.arange(num_sigs) + 0.5
-        ax_obs.set_yticks(yticks)
-        ax_obs.set_yticklabels([str(i) for i in range(num_sigs)])
-        ax_val.set_yticks(yticks)
-        ax_val.set_yticklabels([])
-
-    fig.suptitle("Obstacle signatures and averaged RF slices", y=0.98)
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=200)
-    plt.close(fig)
-    print(f"Saved {out_path}")
-
-
-def plot_obstacle_grid(angles_deg, radii_m, obstacle_grid, out_path):
-    """
-    First image: obstacle types in polar space.
-    """
-    # Ensure consistent order of categories
-    cats = ["open", "trees", "building", "lake", "unknown"]
-    present = {c for c in obstacle_grid.flatten()}
-    cats = [c for c in cats if c in present]
-
-    cat_to_idx = {c: i for i, c in enumerate(cats)}
-    grid_idx = np.vectorize(cat_to_idx.get)(obstacle_grid)
-
-    from matplotlib.colors import ListedColormap
-    colors = [CATEGORY_COLORS[c] for c in cats]
-    cmap = ListedColormap(colors)
-
-    # Extent for imshow
-    if len(radii_m) > 1:
-        dr = radii_m[1] - radii_m[0]
-    else:
-        dr = DR_M
-    r_max = radii_m[-1] + dr / 2.0
-
-    theta_min, theta_max = 0.0, 360.0
-
-    plt.figure(figsize=(10, 6))
-    plt.imshow(
-        grid_idx,
-        origin="lower",
-        aspect="auto",
-        extent=[0, r_max, theta_min, theta_max],
-        cmap=cmap,
-        interpolation="nearest"
-    )
-    cbar = plt.colorbar()
-    cbar.set_ticks(np.arange(len(cats)) + 0.5)
-    cbar.set_ticklabels(cats)
-
-    plt.xlabel("Distance from base (m)")
-    plt.ylabel("Angle (deg)")
-    plt.title("Obstacle categories in polar space")
-
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-    print(f"Saved {out_path}")
-
-def plot_heatmap_with_boundaries(angles_deg, radii_m, heatmap,
-                                 obstacle_grid, out_path):
-    """
-    RF heatmap in polar (angle, distance) image space with obstacle
-    boundaries drawn as thin black grid lines exactly where category
-    changes between neighbouring cells.
-
-    x-axis: distance (m)
-    y-axis: angle (deg)
-    """
-
-    # Helper: contiguous true segments from a 1D bool array
-    def _true_segments(mask):
-        segments = []
-        start = None
-        for idx, val in enumerate(mask):
-            if val and start is None:
-                start = idx
-            elif not val and start is not None:
-                segments.append((start, idx - 1))
-                start = None
-        if start is not None:
-            segments.append((start, len(mask) - 1))
-        return segments
-
-    n_theta, n_r = obstacle_grid.shape
-
-    # Step sizes (assumed uniform)
-    if n_theta > 1:
-        dtheta = float(angles_deg[1] - angles_deg[0])
-    else:
-        dtheta = 360.0
-
-    if n_r > 1:
-        dr = float(radii_m[1] - radii_m[0])
-    else:
-        dr = radii_m[0] * 2.0 if n_r == 1 else 1.0
-
-    # Cell edges for angle and radius (in the image coordinate system)
-    # Row i corresponds to angle centre at (i+0.5)*dtheta, so edges at i*dtheta
-    theta_edges = np.linspace(0.0, n_theta * dtheta, n_theta + 1)
-    # Col j corresponds to radius centre at (j+0.5)*dr, so edges at j*dr
-    r_edges = np.linspace(0.0, n_r * dr, n_r + 1)
-
-    r_max = r_edges[-1]
-    theta_min, theta_max = theta_edges[0], theta_edges[-1]
-
-    # plot figure
-    plt.figure(figsize=(10, 6))
-    ax = plt.gca()
-
-    ## ---- draw horizontal boundaries (between angle rows) ----
-    ## Compare row i vs i+1
-    #for i in range(n_theta - 1):
-    #    diff = (obstacle_grid[i, :] != obstacle_grid[i + 1, :])
-    #    if not diff.any():
-    #        continue
-    #    y = theta_edges[i + 1]  # boundary between row i and i+1
-    #    for j_start, j_end in _true_segments(diff):
-    #        x0 = r_edges[j_start]
-    #        x1 = r_edges[j_end + 1]
-    #        ax.hlines(y, x0, x1, colors="black", linewidth=0.5)
-
-    ## ---- draw vertical boundaries (between radius columns) ----
-    ## Compare col j vs j+1
-    #for j in range(n_r - 1):
-    #    diff = (obstacle_grid[:, j] != obstacle_grid[:, j + 1])
-    #    if not diff.any():
-    #        continue
-    #    x = r_edges[j + 1]  # boundary between col j and j+1
-    #    for i_start, i_end in _true_segments(diff):
-    #        y0 = theta_edges[i_start]
-    #        y1 = theta_edges[i_end + 1]
-    #        ax.vlines(x, y0, y1, colors="black", linewidth=0.5)
-
-    # ---- base heatmap ----
-    im = plt.imshow(
-        heatmap,
-        origin="lower",
-        aspect="auto",
-        extent=[0, r_max, theta_min, theta_max],
-        interpolation="nearest",
-    )
-    cbar = plt.colorbar(im)
-    cbar.set_label("Mean value (v)")
-
-    plt.xlabel("Distance from base (m)")
-    plt.ylabel("Angle (deg)")
-    plt.title("Point heatmap in polar space")
-
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=200)
-    plt.close()
-    print(f"Saved {out_path}")
-
-
-def _points_to_local_xy(points, center_lat, center_lon):
-    """Convert [lat, lon, v] points into (x, y, v) in local meters."""
-    local = []
-    for lat, lon, v in points:
-        x, y = latlon_to_local_xy(lat, lon, center_lat, center_lon)
-        local.append((x, y, v))
-    return local
-
-
-def _compute_xy_extent(polygons, local_points=None, margin_factor=0.05):
-    """Compute plot extents from polygons and optional points."""
-    xs, ys = [], []
-
-    for poly, _cat in polygons:
-        bx_min, by_min, bx_max, by_max = poly.bounds
-        xs.extend([bx_min, bx_max])
-        ys.extend([by_min, by_max])
-
-    if local_points:
-        for x, y, _v in local_points:
-            xs.append(x)
-            ys.append(y)
-
-    if not xs or not ys:
-        # Fallback
-        return (-10, 10, -10, 10)
-
-    x_min, x_max = min(xs), max(xs)
-    y_min, y_max = min(ys), max(ys)
-
-    # Add a small margin
-    dx = x_max - x_min
-    dy = y_max - y_min
-    mx = dx * margin_factor if dx > 0 else 1.0
-    my = dy * margin_factor if dy > 0 else 1.0
-
-    return (x_min - mx, x_max + mx, y_min - my, y_max + my)
-
-
-def _render_xy_scene(
-    polygons,
-    local_points,
-    show_fill=True,
-    show_edges=True,
-    show_rf=False,
-    title="",
-    out_path="xy_plot.png"
-):
-    """
-    Internal renderer for XY plane.
-
-    polygons   : list of (Polygon in local XY, category_str)
-    local_points : list of (x, y, v) in local XY
-    show_fill  : fill polygons with CATEGORY_COLORS
-    show_edges : draw polygon edges
-    show_rf    : scatter RF points coloured by v
-    """
-    # Compute extents
-    x_min, x_max, y_min, y_max = _compute_xy_extent(polygons, local_points)
-
-    fig, ax = plt.subplots(figsize=(8, 8))
-
-    # Draw polygons
-    for poly, cat in polygons:
-        color = CATEGORY_COLORS.get(cat, CATEGORY_COLORS.get("unknown", "#cccccc"))
-        x, y = poly.exterior.xy
-
-        if show_fill:
-            ax.fill(x, y, facecolor=color, edgecolor="none", alpha=0.8)
-        if show_edges:
-            ax.plot(x, y, color="black", linewidth=0.7)
-
-    # RF overlay
-    if show_rf and local_points:
-        xs = [p[0] for p in local_points]
-        ys = [p[1] for p in local_points]
-        vs = [p[2] for p in local_points]
-
-        sc = ax.scatter(xs, ys, c=vs, s=10, alpha=0.8)
-        cbar = fig.colorbar(sc, ax=ax)
-        cbar.set_label("Value (v)")
-
-    ax.set_aspect("equal", adjustable="box")
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylim(y_min, y_max)
-    ax.set_xlabel("X (m, local)")
-    ax.set_ylabel("Y (m, local)")
-    ax.set_title(title)
-
-    # Optional legend for obstacle colours
-    import matplotlib.patches as mpatches
-    labels = ["unknown", "open", "lake", "trees", "building"]
-    patches = []
-    for lab in labels:
-        if lab in CATEGORY_COLORS:
-            patches.append(
-                mpatches.Patch(color=CATEGORY_COLORS[lab], label=lab)
-            )
-    if patches:
-        ax.legend(handles=patches, loc="upper right", fontsize="small", frameon=True)
-
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=200)
-    plt.close(fig)
-    print(f"Saved {out_path}")
-
-
-
-def plot_xy_obstacle_map(polygons, out_path="xy_obstacle_map.png"):
-    """
-    XY-plane obstacle map: filled polygons in their obstacle colours.
-    """
-    _render_xy_scene(
-        polygons=polygons,
-        local_points=None,
-        show_fill=True,
-        show_edges=True,
-        show_rf=False,
-        title="Obstacle map (XY plane)",
-        out_path=out_path,
-    )
-
-def plot_xy_obstacle_boundaries_with_rf(
-    polygons, points, center_lat, center_lon,
-    out_path="xy_obstacle_boundaries_rf.png"
-):
-    """
-    XY-plane: polygon boundaries in black, RF points overlaid as coloured scatter.
-    """
-    local_points = _points_to_local_xy(points, center_lat, center_lon)
-
-    _render_xy_scene(
-        polygons=polygons,
-        local_points=local_points,
-        show_fill=False,   # no fills, just edges
-        show_edges=True,
-        show_rf=True,
-        title="Obstacle boundaries + RF overlay (XY plane)",
-        out_path=out_path,
-    )
-
-def plot_xy_obstacles_with_rf(
-    polygons, points, center_lat, center_lon,
-    out_path="xy_obstacles_rf.png"
-):
-    """
-    XY-plane: filled obstacle polygons plus RF points overlaid as coloured scatter.
-    """
-    local_points = _points_to_local_xy(points, center_lat, center_lon)
-
-    _render_xy_scene(
-        polygons=polygons,
-        local_points=local_points,
-        show_fill=True,
-        show_edges=True,
-        show_rf=True,
-        title="Obstacle map + RF overlay (XY plane)",
-        out_path=out_path,
-    )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def generate_points_yaml(csv_path, yaml_path, center):
-
-    if not os.path.exists(csv_path):
-        print('[CSV] file does not exist')
-        return
-
-    with open(csv_path, newline="") as csvfile, open(yaml_path, "w") as yamlfile:
-        reader = csv.reader(csvfile)
-
-        # Header comments
-        yamlfile.write("# ----------------------\n")
-        yamlfile.write("# YAML\n")
-        yamlfile.write("#\n")
-        yamlfile.write("# ----------------------\n")
-
-        # Center line
-        yamlfile.write(f"center: [{center[0]}, {center[1]}]\n")
-        yamlfile.write("gps_coords_xyv:\n")
-
-        # Each row is [v, x, y, d, f]
-        for row in reader:
-            # skip empty lines
-            if not row or all(cell.strip() == "" for cell in row):
-                continue
-
-            v = float(row[0])
-            x = float(row[1])
-            y = float(row[2])
-
-            yamlfile.write(f"  -  [{x}, {y}, {v}]\n")
 def compute_signature_knowledge(obstacle_grid, heatmap):
     """
     From the existing polar obstacle grid + heatmap, build a dict:
@@ -830,13 +316,13 @@ def compute_signature_knowledge(obstacle_grid, heatmap):
         has_any = sampled_mask[rows, :].any(axis=0)  # any data in any row with this sig
         knowledge[sig] = has_any
 
-    return knowledge  # dict: sig -> bool[n_r]
+    return knowledge
+
+
 def compute_signature_knowledge_from_slices(unique_sigs, mean_slices):
     """
     Build a knowledge dict directly from the signature-slice map:
-
         knowledge[sig] -> bool[n_r]
-
     where knowledge[sig][j] == True iff there is *any* existing data for
     that signature at radius bin j (i.e. mean_slices is not NaN there).
     """
@@ -848,42 +334,382 @@ def compute_signature_knowledge_from_slices(unique_sigs, mean_slices):
         knowledge[sig] = ~np.isnan(row)
 
     return knowledge
-def build_polar_obstacle_grid_for_center(polygons, center_x, center_y,
-                                         angles_deg, radii_m):
+
+
+# =========================
+# PLOTTING FUNCTIONS
+# =========================
+
+def plot_signature_slices(radii_m, unique_sigs, mean_slices, out_path):
+    """Two-panel plot using Render class."""
+    from render import Render
+    
+    renderer = Render()
+    renderer._radii_m = radii_m
+    renderer.render_signature_slices(unique_sigs, mean_slices, out_path)
+
+
+def plot_obstacle_grid(angles_deg, radii_m, obstacle_grid, out_path):
+    """Obstacle types in polar space using Render class."""
+    from render import Render
+    
+    renderer = Render()
+    renderer.set_polar_grid(angles_deg, radii_m, obstacle_grid)
+    renderer.render_obstacle_polar(out_path)
+
+
+def plot_heatmap_with_boundaries(angles_deg, radii_m, heatmap,
+                                 obstacle_grid, out_path):
+    """RF heatmap in polar coordinates using Render class."""
+    from render import Render
+    
+    renderer = Render()
+    renderer.set_polar_grid(angles_deg, radii_m, obstacle_grid)
+    renderer.set_heatmap(heatmap)
+    renderer.render_heatmap_polar(out_path)
+
+
+def plot_xy_obstacle_map(polygons, out_path="xy_obstacle_map.png"):
+    """XY-plane obstacle map using Render class."""
+    from render import Render
+    
+    renderer = Render()
+    renderer.polygons = polygons
+    renderer.render_xy_obstacles(out_path)
+
+
+def plot_xy_obstacle_boundaries_with_rf(
+    polygons, points, center_lat, center_lon,
+    out_path="xy_obstacle_boundaries_rf.png"
+):
+    """XY-plane boundaries with RF overlay using Render class."""
+    from render import Render
+    
+    # Convert points to local XY
+    local_points = []
+    for lat, lon, v in points:
+        x, y = latlon_to_local_xy(lat, lon, center_lat, center_lon)
+        local_points.append((x, y, v))
+    
+    renderer = Render()
+    renderer.polygons = polygons
+    renderer.local_rf_points = local_points
+    renderer.render_xy_boundaries_rf(out_path)
+
+
+def plot_xy_obstacles_with_rf(
+    polygons, points, center_lat, center_lon,
+    out_path="xy_obstacles_rf.png"
+):
+    """XY-plane obstacles with RF overlay using Render class."""
+    from render import Render
+    
+    # Convert points to local XY
+    local_points = []
+    for lat, lon, v in points:
+        x, y = latlon_to_local_xy(lat, lon, center_lat, center_lon)
+        local_points.append((x, y, v))
+    
+    renderer = Render()
+    renderer.polygons = polygons
+    renderer.local_rf_points = local_points
+    renderer.render_xy_obstacles_rf(out_path)
+
+
+def plot_sampling_and_signature_coverage_data_map(
+    polygons,
+    samples,
+    unique_sigs,
+    mean_slices,
+    radii_m,
+    knowledge,
+    out_path="sampling_and_signature_coverage.png",
+    max_walk_radius_m=None,
+    include_new_signatures=True,
+    all_centres=None,
+):
     """
-    Build a polar obstacle grid around an arbitrary XY centre.
-
-    polygons   : list of (shapely Polygon in local XY, category_str)
-    center_x,y : base station location in that same XY frame
-    angles_deg : list/array of angle bin centres in degrees (0..360)
-    radii_m    : list/array of radius bin centres in metres
-
-    Returns:
-        obstacle_grid_center : (n_theta, n_r) array of category strings
-                               (e.g. 'open', 'trees', 'lake', 'building', 'unknown')
+    Complex plot showing sampling locations and coverage analysis.
+    
+    Left: XY obstacle map with sampling locations
+    Right: 2x2 grid showing coverage for top 4 samples
     """
-    n_theta = len(angles_deg)
-    n_r = len(radii_m)
+    from render_utils import compute_xy_extent
+    
+    sample_colors = [
+        "#e41a1c",  # red
+        "#377eb8",  # blue
+        "#4daf4a",  # green
+        "#ff7f00",  # orange
+        "#984ea3",  # purple
+    ]
+    n_samples = min(len(samples), len(sample_colors))
+    n_show = min(n_samples, 4)
 
-    obstacle_grid_center = np.empty((n_theta, n_r), dtype=object)
-    obstacle_grid_center[:] = "unknown"
+    num_sigs_base, n_r = mean_slices.shape
 
-    # We assume polygons are already in the same XY coordinate frame as center_x, center_y
-    shapely_polys = [(poly, cat) for (poly, cat) in polygons]
+    # radius -> x extent
+    if n_r > 1:
+        dr_plot = float(radii_m[1] - radii_m[0])
+    else:
+        dr_plot = 1.0
+    r_max_full = radii_m[-1] + dr_plot / 2.0
 
-    for ith, theta_deg in enumerate(angles_deg):
-        theta_rad = np.deg2rad(theta_deg)
-        cos_t = np.cos(theta_rad)
-        sin_t = np.sin(theta_rad)
+    # Build extended signature list
+    base_sig_set = set(unique_sigs)
+    sigs_from_samples = set()
+    for s in samples[:n_samples]:
+        sigs_from_samples |= set(s["coverage"].keys())
 
-        for jr, r in enumerate(radii_m):
-            x = center_x + r * cos_t
-            y = center_y + r * sin_t
-            pt = Point(x, y)
+    if include_new_signatures:
+        all_sigs = base_sig_set | sigs_from_samples
+    else:
+        all_sigs = base_sig_set | (sigs_from_samples & set(knowledge.keys()))
 
-            for poly, cat in shapely_polys:
-                if poly.contains(pt):
-                    obstacle_grid_center[ith, jr] = cat
-                    break  # first match wins; assume polygons don't overlap in categories
+    extended_sigs = sorted(all_sigs)
+    num_sigs_ext = len(extended_sigs)
 
-    return obstacle_grid_center
+    sig_to_row_ext = {s: i for i, s in enumerate(extended_sigs)}
+    base_sig_to_row = {s: i for i, s in enumerate(unique_sigs)}
+
+    print("========== [DEBUG] Signature / knowledge summary ==========")
+    print(f"[DEBUG] unique_sigs: {len(unique_sigs)}")
+    print(f"[DEBUG] knowledge entries: {len(knowledge)}")
+    print(f"[DEBUG] coverage sigs from samples: {len(sigs_from_samples)}")
+    print(f"[DEBUG] extended_sigs: {num_sigs_ext}")
+    if extended_sigs:
+        print("[DEBUG] first 5 extended_sigs:")
+        for s in extended_sigs[:5]:
+            print("   ", s[:50] + ("..." if len(s) > 50 else ""))
+    print("===========================================================\n")
+
+    # Build extended data map and knowledge map
+    extended_data = np.full((num_sigs_ext, n_r), np.nan, dtype=float)
+    knowledge_mat = np.zeros((num_sigs_ext, n_r), dtype=bool)
+
+    for s, row_ext in sig_to_row_ext.items():
+        if s in base_sig_to_row:
+            row_base = base_sig_to_row[s]
+            extended_data[row_ext, :] = mean_slices[row_base, :]
+        if s in knowledge:
+            knowledge_mat[row_ext, :] = knowledge[s]
+
+    # Figure layout
+    fig = plt.figure(figsize=(16, 8))
+    gs = gridspec.GridSpec(
+        2, 3, width_ratios=[1.3, 1.0, 1.0], height_ratios=[1.0, 1.0], figure=fig
+    )
+
+    ax_xy = fig.add_subplot(gs[:, 0])
+    ax_s0 = fig.add_subplot(gs[0, 1])
+    ax_s1 = fig.add_subplot(gs[0, 2])
+    ax_s2 = fig.add_subplot(gs[1, 1])
+    ax_s3 = fig.add_subplot(gs[1, 2])
+    sample_axes = [ax_s0, ax_s1, ax_s2, ax_s3]
+
+    def is_base_sample(sample):
+        return abs(sample.get("score", 0.0)) < 1e-9
+
+    # LEFT: XY obstacle + centres + samples using render_utils
+    x_min, x_max, y_min, y_max = compute_xy_extent(polygons)
+    
+    # Extend for samples and centres
+    xs_all = [x_min, x_max]
+    ys_all = [y_min, y_max]
+    
+    if all_centres is not None:
+        xs_all.extend([c["x"] for c in all_centres])
+        ys_all.extend([c["y"] for c in all_centres])
+    xs_all.extend([s["x"] for s in samples[:n_samples]])
+    ys_all.extend([s["y"] for s in samples[:n_samples]])
+    
+    if xs_all and ys_all:
+        x_min, x_max = min(xs_all), max(xs_all)
+        y_min, y_max = min(ys_all), max(ys_all)
+        dx = x_max - x_min
+        dy = y_max - y_min
+        mx = dx * 0.05 if dx > 0 else 1.0
+        my = dy * 0.05 if dy > 0 else 1.0
+        x_min -= mx
+        x_max += mx
+        y_min -= my
+        y_max += my
+
+    # Draw obstacle polygons
+    for poly, cat in polygons:
+        color = CATEGORY_COLORS.get(cat, CATEGORY_COLORS.get("unknown", "#cccccc"))
+        x_poly, y_poly = poly.exterior.xy
+        ax_xy.fill(
+            x_poly,
+            y_poly,
+            facecolor=color,
+            edgecolor="black",
+            linewidth=0.5,
+            alpha=0.7,
+        )
+
+    # All evaluated centres as faint x
+    if all_centres is not None and len(all_centres) > 0:
+        xs_c = [c["x"] for c in all_centres]
+        ys_c = [c["y"] for c in all_centres]
+        ax_xy.scatter(
+            xs_c,
+            ys_c,
+            marker="x",
+            color="black",
+            s=15,
+            alpha=0.3,
+            zorder=2,
+        )
+
+    # Chosen samples as coloured circles + rings
+    for idx in range(n_samples):
+        s = samples[idx]
+        ax_xy.scatter(
+            s["x"],
+            s["y"],
+            color=sample_colors[idx],
+            s=60,
+            marker="o",
+            edgecolor="black",
+            linewidths=1.0,
+            zorder=5,
+        )
+        ax_xy.text(
+            s["x"],
+            s["y"],
+            f"{idx+1}",
+            color="black",
+            fontsize=5,
+            ha="center",
+            va="center",
+            zorder=6,
+        )
+        if max_walk_radius_m is not None:
+            ring = Circle(
+                (s["x"], s["y"]),
+                radius=max_walk_radius_m,
+                edgecolor=sample_colors[idx],
+                facecolor="none",
+                linewidth=1.0,
+                alpha=0.8,
+                zorder=4,
+            )
+            ax_xy.add_patch(ring)
+
+    ax_xy.set_aspect("equal", adjustable="box")
+    ax_xy.set_xlim(x_min, x_max)
+    ax_xy.set_ylim(y_min, y_max)
+    ax_xy.set_xlabel("X (m, local)")
+    ax_xy.set_ylabel("Y (m, local)")
+    ax_xy.set_title("Sampling locations (all centres 'x', chosen dots + rings)")
+
+    # Legend
+    patches = []
+    for lab in ["open", "trees", "building", "lake", "unknown"]:
+        if lab in CATEGORY_COLORS:
+            patches.append(mpatches.Patch(color=CATEGORY_COLORS[lab], label=lab))
+    for idx in range(n_samples):
+        patches.append(
+            mpatches.Patch(color=sample_colors[idx], label=f"sample {idx+1}")
+        )
+    if patches:
+        ax_xy.legend(handles=patches, loc="upper right",
+                     fontsize="small", frameon=True)
+
+    # RIGHT: per-sample coverage maps
+    for ax in sample_axes:
+        ax.imshow(
+            extended_data,
+            origin="lower",
+            aspect="auto",
+            extent=[0, r_max_full, 0, num_sigs_ext],
+            interpolation="nearest",
+        )
+
+    combined_new = np.zeros((num_sigs_ext, n_r), dtype=bool)
+
+    for s_idx in range(n_show):
+        s = samples[s_idx]
+        ax = sample_axes[s_idx]
+        cov = s["coverage"]
+
+        print(f"\n---------- [DEBUG] Sample {s_idx + 1} ----------")
+        print(f"[DEBUG] sample idx={s_idx}, score={s.get('score', 0.0)}")
+        print(f"[DEBUG] coverage has {len(cov)} signatures")
+
+        show_cells = np.zeros((num_sigs_ext, n_r), dtype=bool)
+        existing_gain = 0
+        new_gain = 0
+
+        if is_base_sample(s):
+            show_cells = knowledge_mat.copy()
+            existing_gain = int(show_cells.sum())
+            print(
+                f"[COVERAGE] sample {s_idx+1} (base): "
+                f"existing_cells={existing_gain}, new_cells=0"
+            )
+        else:
+            for sig, mask in cov.items():
+                if sig not in sig_to_row_ext:
+                    continue
+                row = sig_to_row_ext[sig]
+
+                show_cells[row, :] |= mask
+
+                known_row = knowledge_mat[row, :]
+                new_cells = mask & ~known_row
+                combined_new[row, :] |= new_cells
+
+                gain_here = int(new_cells.sum())
+                if sig in base_sig_set:
+                    existing_gain += gain_here
+                else:
+                    new_gain += gain_here
+
+            print(
+                f"[COVERAGE] sample {s_idx+1}: "
+                f"existing_gain={existing_gain}, new_gain={new_gain}, "
+                f"total_covered_cells={int(show_cells.sum())}"
+            )
+
+        # Overlay coverage
+        mask_display = np.ma.masked_where(~show_cells, show_cells)
+        rgba = to_rgba(sample_colors[s_idx])
+        hl_cmap = ListedColormap([(0, 0, 0, 0), rgba])
+
+        ax.imshow(
+            mask_display,
+            origin="lower",
+            aspect="auto",
+            extent=[0, r_max_full, 0, num_sigs_ext],
+            cmap=hl_cmap,
+            interpolation="nearest",
+            alpha=0.9,
+        )
+
+        if is_base_sample(s):
+            ax.set_title("Sample 1 (base)\nexisting coverage")
+        else:
+            ax.set_title(
+                f"Sample {s_idx+1}\n(gain_existing={existing_gain}, gain_new={new_gain})"
+            )
+        ax.set_xlabel("Distance (m)")
+        ax.set_yticks([])
+
+    # Hide unused sample axes
+    for idx in range(n_show, 4):
+        sample_axes[idx].axis("off")
+
+    # Crop x-axis
+    used_cols = np.any(knowledge_mat | combined_new, axis=0)
+    if used_cols.any():
+        last_col = np.max(np.where(used_cols)[0])
+        r_max_plot = (last_col + 1) * dr_plot
+        for ax in sample_axes:
+            ax.set_xlim(0, r_max_plot)
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+    print(f"\nSaved {out_path}")
