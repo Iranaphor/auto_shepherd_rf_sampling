@@ -13,8 +13,11 @@
 FROM python:3.11-slim
 
 # Install system dependencies (optional but often useful for scientific Python)
+# Added tk for matplotlib interactive display
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    python3-tk \
+    tk-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Set working directory

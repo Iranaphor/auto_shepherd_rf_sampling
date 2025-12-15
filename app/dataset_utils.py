@@ -77,9 +77,8 @@ def save_dataset_yaml(yaml_path, obstacles, signatures):
                         if val is None:
                             row_strs.append('null')
                         else:
-                            # Round to 1 decimal place and remove negative sign
-                            abs_val = abs(round(float(val), 1))
-                            row_strs.append(str(abs_val))
+                            # Round to 2 decimal places
+                            row_strs.append(str(round(float(val), 2)))
                     rf_lines.append('[' + ', '.join(row_strs) + ']')
                 
                 # Write as flow-style array of arrays (single line per row)

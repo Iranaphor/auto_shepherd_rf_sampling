@@ -17,46 +17,38 @@ services:
 
     # Run container processes as the same UID:GID as the host user
     user: "${UID}:${GID}"
+    
+    # Use host network for X11 display
+    network_mode: host
 
     # Mount local ./data directory into /data in the container
     # Mount local ./src directory into /src in the container
+    # Mount X11 socket for interactive display
     volumes:
       - ./data:/data
       - ./app:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
     #Declare the environment variables for extend_dataset.py and config.py
     environment:
-      - DATA_PATH=/data/riseholme_south
-      - DATASET_PATH=/data/dataset.yaml
-      - OUTPUT_PATH=/data/dataset_extended.yaml
-      - DTHETA=5.0
-      - DR=10.0
-      - MAX_RANGE=500.0
+      - DATA_PATH=/data/riseholme_north
+      - DATASET_PATH=/data/dataset_extended.yaml
       - RF_TYPE=ssid-espnow
-      - PLOT_OUTPUT=/data/riseholme_south/dataset_comparison.png
-      - ANGULAR_BIN_SIZE=30.0
-      - RADIAL_BIN_SIZE=15.0
+      - DISPLAY=${DISPLAY}
 
     #Execute command
-    command: ["python3", "/app/extend_dataset.py"]
+    command: ["python3", "/app/predict_dropoff.py"]
 
-    # 2. Generate the signature associated dataset
-    # Using the obstacle map and the rf data, generate the
-    # polar graphs and contribute the provided rf data into
-    # the provided association graph.
+    # 3. Predict peer-to-peer communications
+    # Using the association dataset and the new obstacle map
+    # for the new location, run a live system which will display
+    # the predicted dropoff graph between 2 points on an 
+    # interactive display.
 
-    #  /app/extend_dataset.py
-    #     - read in rf data
-    #     - read in obstacle map
-    #     - convert obstacle map and rf data into polar maps
-    #     - get unique set of obstacle signatures
-    #     - associate obstacle signature to rf signature
-    #     - read in existing rf-signature data
-    #     - extend the existing rf with the new rf data 
-    #     - generate before and after signature-rf pairs images
-
-
-
-
-
+    #  /app/predict_dropoff.py
+    #     - read in rf-signature dataset
+    #     - read in xy obstacle map
+    #     - open interactive image
+    #     - click on 2 points
+    #     - generate expected dropoff graph
 

@@ -22,8 +22,29 @@ from matplotlib.patches import Circle
 from shapely.geometry import Point
 from collections import defaultdict
 
-from config import *
 from kml_utils import latlon_to_local_xy, load_kml_polygons
+
+# Default bin sizes (can be overridden by dataset)
+DEFAULT_DTHETA_DEG = 5.0
+DEFAULT_DR_M = 10.0
+
+# Obstacle category colors for plotting
+CATEGORY_COLORS = {
+    "unknown":  "#cccccc",
+    "open":     "#ffffff",
+    "lake":     "#0066ff",
+    "trees":    "#00aa00",
+    "building": "#ff9900"
+}
+
+# Map obstacle categories to numeric codes
+OBSTACLE_CODES = {
+    "unknown": "0",
+    "open": "1",
+    "lake": "2",
+    "trees": "3",
+    "building": "4"
+}
 
 
 # =========================

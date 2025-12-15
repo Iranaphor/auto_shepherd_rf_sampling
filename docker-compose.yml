@@ -26,7 +26,7 @@ services:
 
     #Declare the environment variable $DATA_PATH
     environment:
-      - DATA_PATH=/data/riseholme_south
+      - DATA_PATH=/data/riseholme_lake
       - CENTER_LAT=53.26831
       - CENTER_LON=-0.52984
       - ANGULAR_BIN_SIZE=30.0
@@ -49,12 +49,12 @@ services:
     # the provided association graph.
     #command: ["python3", "/app/extend_dataset.py"]
 
-    # 3. Predict peer-to-peer comms
+    # 3. Predict peer-to-peer communications
     # Using the association dataset and the new obstacle map
     # for the new location, run a live system which will display
     # the predicted dropoff graph between 2 points on an 
     # interactive display.
-    #command: ["python3", "/app/predict_rf_dropoff.py"]
+    #command: ["python3", "/app/predict_communication_dropoff.py"]
 
 
 

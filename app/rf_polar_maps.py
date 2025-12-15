@@ -13,7 +13,6 @@
 
 import os
 
-from config import MAX_RANGE_M, DTHETA_DEG, DR_M
 from utils import (
     load_yaml_points, generate_points_yaml,
     compute_max_range, build_polar_grid,
@@ -49,13 +48,13 @@ def main():
     # Load KML polygons
     polygons = load_kml_polygons(kml_path, center_lat, center_lon)
 
-    # Determine max range
-    if MAX_RANGE_M is None:
-        max_range = compute_max_range(polygons, center_lat, center_lon, points)
-    else:
-        max_range = MAX_RANGE_M
-
+    # Determine max range (default: compute from data)
+    max_range = compute_max_range(polygons, center_lat, center_lon, points)
     print(f"[INFO] Using max range: {max_range:.1f} m")
+
+    # Default bin sizes
+    DTHETA_DEG = 5.0
+    DR_M = 10.0
 
     # Build polar obstacle grid
     angles_deg, radii_m, obstacle_grid = build_polar_grid(
@@ -108,9 +107,6 @@ def main():
 
     # Build knowledge from signature-slice map
     # Build knowledge directly from what the signature-slice map shows
-    knowledge = compute_signature_knowledge_from_slices(unique_sigs, mean_slices)
-
-    samples, all_centres = select_top_sampling_locations(
     knowledge = compute_signature_knowledge_from_slices(unique_sigs, mean_slices)
 
     # Select optimal sampling locations

@@ -118,7 +118,7 @@ def extend_dataset(existing_signatures, new_sig_data, rf_type='ssid-espnow'):
     return merged_signatures
 
 
-def generate_comparison_plots(before_sigs, after_sigs, radii_m, output_path):
+def generate_comparison_plots(before_sigs, after_sigs, radii_m, output_path, polygons, points, center_lat, center_lon):
     """Generate before and after visualization."""
     print("\n=== STEP 5: Generating Visualizations ===")
     
@@ -157,12 +157,21 @@ def generate_comparison_plots(before_sigs, after_sigs, radii_m, output_path):
     before_data = extract_mean_values(before_sigs)
     after_data = extract_mean_values(after_sigs)
     
+    # Load obstacles for color mapping
+    from dataset_utils import load_dataset_yaml
+    obstacles_for_plot, _ = load_dataset_yaml(os.getenv('DATASET_PATH'))
+    
     # Generate plot
     plot_signature_comparison(
         before_sigs, after_sigs,
         before_data, after_data,
         radii_m,
         output_path,
+        polygons,
+        points,
+        center_lat,
+        center_lon,
+        obstacles_for_plot,
         title_prefix="RF Dataset"
     )
 
@@ -234,7 +243,11 @@ def main():
         existing_signatures,
         merged_signatures,
         radii_m,
-        plot_output
+        plot_output,
+        polygons,
+        points,
+        center_lat,
+        center_lon
     )
     
     # Prepare and save dataset
