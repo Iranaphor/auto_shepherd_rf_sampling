@@ -71,7 +71,8 @@ class Render:
 
     def render(self, obstacle_edge=False, obstacle_fill=False, rf_data=False,
                use_polar=False, fileout=None):
-        """Render visualization based on specified options.""" return self._render_xy(obstacle_edge, obstacle_fill, rf_data, fileout)
+        """Render visualization based on specified options."""
+        return self._render_xy(obstacle_edge, obstacle_fill, rf_data, fileout)
     
     def _render_xy(self, show_edges, show_fill, show_rf, fileout):
         """Render XY plane visualization."""
@@ -81,7 +82,6 @@ class Render:
         local_points = self.local_rf_points if show_rf else None
 
         # Compute extent
-            return self._render_xy(obstacle_edge, obstacle_fill, rf_data, fileout)
 
 
     def _render_xy(self, show_edges, show_fill, show_rf, fileout):
@@ -260,11 +260,9 @@ class Render:
         )
         
         # Left: obstacle patterns
-        fig, (ax_obs, ax_val) = plt.subplots(
-            1, 2,
-            figsize=(30, max(4, 0.25 * num_sigs)),
-            sharey=True
-        )
+        im_obs = ax_obs.imshow(
+            obs_pattern,
+            aspect="auto",
             cmap=obs_cmap,
             norm=obs_norm,
             interpolation="nearest"

@@ -122,11 +122,17 @@ def select_top_sampling_locations(
     def score_candidate_center(x_c, y_c):
         """
         Build polar obstacle grid around (x_c, y_c), compute signature coverage
-        sig_match_cache[sig_raw] = canonical
-        return canonical
+        and calculate coverage scores for existing and new signatures.
+        """
+        obs_grid_c = build_polar_obstacle_grid_for_center(
+            x_c, y_c, angles_deg, radii_m, polygons
+        )
 
-    def score_candidate_center(x_c, y_c):
-        """Build polar grid around centre and compute coverage scores.""" cats_row = obs_grid_c[ith, :]
+        n_theta = len(angles_deg)
+        cov = defaultdict(lambda: np.zeros(n_r, dtype=bool))
+
+        for ith in range(n_theta):
+            cats_row = obs_grid_c[ith, :]
             raw_sig = "".join(
                 OBSTACLE_CODES.get(c, OBSTACLE_CODES["unknown"]) for c in cats_row
             )
@@ -154,18 +160,20 @@ def select_top_sampling_locations(
             "x": x_c,
             "y": y_c,
             "score_existing": score_existing,
-        score_weighted = existing_weight * score_existing + new_weight * score_new
-
-        return {
-            "x": x_c,
-            "y": y_c,
-            "score_existing": score_existing,
             "score_new": score_new,
             "score": float(score_weighted),
             "coverage": dict(cov),
         }
 
     all_centres = []
+    coarse_candidates = []
+    chosen = []
+    chosen_xy = []
+    min_spacing_sq = min_spacing_m * min_spacing_m
+
+    # Generate coarse grid
+    xs_coarse = np.arange(x_min, x_max + candidate_grid_step_m * 0.5, candidate_grid_step_m)
+    ys_coarse = np.arange(y_min, y_max + candidate_grid_step_m * 0.5, candidate_grid_step_m)
 
     # Coarse grid search
     for x_c in xs_coarse:
@@ -202,12 +210,12 @@ def select_top_sampling_locations(
     coarse_to_refine = coarse_candidates[:n_refine]
     print(f"[INFO] Coarse grid produced {len(coarse_candidates)} candidates, "
           f"refining top {n_refine}.")
-    print(f"[INFO] Coarse grid produced {len(coarse_candidates)} candidates, "
-          f"refining top {n_refine}.")
 
     # Fine grid refinement
     fine_candidates = []
-    seen_xy = set()e_to_refine:
+    seen_xy = set()
+    
+    for cc in coarse_to_refine:
         x_c, y_c = cc["x"], cc["y"]
 
         x_start = x_c - candidate_grid_step_m
@@ -240,10 +248,6 @@ def select_top_sampling_locations(
                 if cand["score"] <= 0:
                     continue
                 fine_candidates.append(cand)
-
-    final_candidates = fine_candidates if fine_candidates else coarse_candidates
-    if not fine_candidates:
-        print("[INFO] No beneficial fine candidates found; falling back to coarse.")
 
     final_candidates = fine_candidates if fine_candidates else coarse_candidates
     if not fine_candidates:

@@ -109,9 +109,6 @@ def main():
     # Build knowledge directly from what the signature-slice map shows
     knowledge = compute_signature_knowledge_from_slices(unique_sigs, mean_slices)
 
-    samples, all_centres = select_top_sampling_locations(
-    knowledge = compute_signature_knowledge_from_slices(unique_sigs, mean_slices)
-
     # Select optimal sampling locations
     samples, all_centres = select_top_sampling_locations(
         polygons,

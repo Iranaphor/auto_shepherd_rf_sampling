@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch
 
 from kml_utils import load_kml_polygons, latlon_to_local_xy
-from utils import load_yaml_points, build_polar_grid
 from dataset_utils import load_dataset_yaml, build_obstacle_type_map
 from render_utils import compute_xy_extent, get_default_dpi
 
@@ -28,8 +27,16 @@ from render_utils import compute_xy_extent, get_default_dpi
 class RFDropoffPredictor:
     """Interactive tool for predicting RF signal dropoff between two points."""
     
-    def __init__(self, dataset_path, kml_path, points_yaml, rf_type='ssid-espnow'):
-        """Initialize the predictor with dataset and obstacle map."""
+    def __init__(self, dataset_path, kml_path, center_lat=None, center_lon=None, rf_type='ssid-espnow'):
+        """Initialize the predictor with dataset and obstacle map.
+        
+        Args:
+            dataset_path: Path to dataset YAML file
+            kml_path: Path to KML obstacle map
+            center_lat: Center latitude for coordinate conversion (optional, will auto-detect from KML)
+            center_lon: Center longitude for coordinate conversion (optional, will auto-detect from KML)
+            rf_type: Type of RF data to use (default: 'ssid-espnow')
+        """
         print("[INIT] Loading dataset and obstacle map...")
         
         # Load dataset
@@ -49,8 +56,15 @@ class RFDropoffPredictor:
         
         print(f"[DATASET] Obstacle colors: {self.obstacle_colors}")
         
-        # Load RF points for center coordinates
-        self.center_lat, self.center_lon, points = load_yaml_points(points_yaml)
+        # If center coordinates not provided, use auto-detection from KML
+        if center_lat is None or center_lon is None:
+            from kml_utils import auto_detect_center
+            self.center_lat, self.center_lon = auto_detect_center(kml_path)
+            print(f"[KML] Auto-detected center: {self.center_lat:.6f}, {self.center_lon:.6f}")
+        else:
+            self.center_lat = center_lat
+            self.center_lon = center_lon
+            print(f"[CONFIG] Using provided center: {self.center_lat:.6f}, {self.center_lon:.6f}")
         
         # Load obstacle polygons
         self.polygons = load_kml_polygons(kml_path, self.center_lat, self.center_lon)
@@ -493,21 +507,29 @@ def main():
     dataset_path = os.getenv('DATASET_PATH')
     rf_type = os.getenv('RF_TYPE', 'ssid-espnow')
     
+    # Optional center coordinates
+    center_lat = os.getenv('CENTER_LAT')
+    center_lon = os.getenv('CENTER_LON')
+    if center_lat:
+        center_lat = float(center_lat)
+    if center_lon:
+        center_lon = float(center_lon)
+    
     # Validate required parameters
     if not data_path:
         raise ValueError("DATA_PATH environment variable is required")
     if not dataset_path:
         raise ValueError("DATASET_PATH environment variable is required")
     
-    # File paths
-    points_yaml = os.path.join(data_path, 'points.yaml')
+    # File path
     kml_path = os.path.join(data_path, 'feature_map.kml')
     
     # Create and run predictor
     predictor = RFDropoffPredictor(
         dataset_path=dataset_path,
         kml_path=kml_path,
-        points_yaml=points_yaml,
+        center_lat=center_lat,
+        center_lon=center_lon,
         rf_type=rf_type
     )
     

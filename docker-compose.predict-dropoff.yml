@@ -31,7 +31,7 @@ services:
 
     #Declare the environment variables for extend_dataset.py and config.py
     environment:
-      - DATA_PATH=/data/riseholme_lake
+      - DATA_PATH=/data/riseholme_north
       - DATASET_PATH=/data/dataset_extended.yaml
       - RF_TYPE=ssid-espnow
       - DISPLAY=${DISPLAY}

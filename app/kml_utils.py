@@ -65,6 +65,39 @@ def classify_category(name_str):
     return "unknown"
 
 
+def auto_detect_center(kml_path):
+    """
+    Auto-detect center coordinates from KML file by finding the centroid of all polygons.
+    Returns (center_lat, center_lon) tuple.
+    """
+    tree = ET.parse(kml_path)
+    root = tree.getroot()
+    
+    all_lats = []
+    all_lons = []
+    
+    # Extract all coordinates from all polygons
+    for coords_el in root.findall(".//{*}Polygon//{*}coordinates"):
+        if coords_el.text:
+            coord_text = coords_el.text.strip()
+            for line in coord_text.split():
+                parts = line.split(",")
+                if len(parts) >= 2:
+                    lon_deg = float(parts[0])
+                    lat_deg = float(parts[1])
+                    all_lons.append(lon_deg)
+                    all_lats.append(lat_deg)
+    
+    if not all_lats or not all_lons:
+        raise ValueError("No coordinates found in KML file")
+    
+    # Use the centroid as the center
+    center_lat = sum(all_lats) / len(all_lats)
+    center_lon = sum(all_lons) / len(all_lons)
+    
+    return center_lat, center_lon
+
+
 def load_kml_polygons(kml_path, center_lat, center_lon):
     """
     Load polygons from KML file and convert to local XY coordinates.
