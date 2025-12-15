@@ -17,48 +17,39 @@ services:
 
     # Run container processes as the same UID:GID as the host user
     user: "${UID}:${GID}"
+    
+    # Use host network for X11 display
+    network_mode: host
 
     # Mount local ./data directory into /data in the container
     # Mount local ./src directory into /src in the container
+    # Mount X11 socket for interactive display
     volumes:
       - ./data:/data
       - ./app:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
 
     #Declare the environment variable $DATA_PATH
     environment:
       - DATA_PATH=/data/riseholme_lake
       - CENTER_LAT=53.26831
       - CENTER_LON=-0.52984
-      - ANGULAR_BIN_SIZE=30.0
+      - GRID_SPACING=50.0
+      - NUM_SUBNODES=3
+      - ANGULAR_BIN_SIZE=10.0
       - RADIAL_BIN_SIZE=20.0
+      - MAX_RANGE_M=500.0
 
     #Execute command
-    command: ["python3", "/app/rf_polar_maps.py"]
-
+    command: ["python3", "-u", "/app/generate_search_route.py"]
 
 
     # 1. Generate a waypoint path to optimise data collection
     # Takes in obstacle-map and base location and generates 
     # a list of waypoints to optimise search through obstacle 
     # signatures.
-    #command: ["python3", "/app/generate_search_route.py"]
-
-    # 2. Generate the signature associated dataset
-    # Using the obstacle map and the rf data, generate the
-    # polar graphs and contribute the provided rf data into
-    # the provided association graph.
-    #command: ["python3", "/app/extend_dataset.py"]
-
-    # 3. Predict peer-to-peer communications
-    # Using the association dataset and the new obstacle map
-    # for the new location, run a live system which will display
-    # the predicted dropoff graph between 2 points on an 
-    # interactive display.
-    #command: ["python3", "/app/predict_communication_dropoff.py"]
 
 
-
-    # What functionality / visualising do they share?
     #  /app/generate_search_route.py
     #     - obstacle map from kml
     #       - generate (+save)
@@ -76,29 +67,3 @@ services:
     #       - generate image of desired path over environment
     #       - generate image of expected obstacle signatures
     #       - generate image of expected obstacle signature set
-    #  /app/extend_dataset.py
-    #     - read in rf data
-    #     - read in obstacle map
-    #     - convert obstacle map and rf data into polar maps
-    #     - get unique set of obstacle signatures
-    #     - associate obstacle signature to rf signature
-    #     - read in existing rf-signature data
-    #     - extend the existing rf with the new rf data 
-    #     - generate before and after signature-rf pairs images
-    #  /app/predict_rf_dropoff.py
-    #     - read in rf-signature dataset
-    #     - read in xy obstacle map
-    #     - open interactive image
-    #     - click on 2 points
-    #     - generate expected dropoff graph
-
-
-    # What i wuld like to do first though:
-    #    - setup a class for generating images from [rf/obstacle]/[xy/polar] maps
-
-
-
-
-
-
-

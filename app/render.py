@@ -138,25 +138,24 @@ class Render:
         fig, ax = plt.subplots(figsize=get_default_figsize())
 
         # Show obstacle grid
-            numeric_grid, categories = obstacle_grid_to_numeric(self._obstacle_grid)
-            cmap, norm, _ = get_obstacle_colormap(categories)
+        numeric_grid, categories = obstacle_grid_to_numeric(self._obstacle_grid)
+        cmap, norm, _ = get_obstacle_colormap(categories)
 
-            im = ax.imshow(
-                numeric_grid,
-                origin="lower",
-                aspect="auto",
-                extent=[0, r_max, theta_min, theta_max],
-                cmap=cmap,
-                norm=norm,
-                interpolation="nearest"
-            )
+        im = ax.imshow(
+            numeric_grid,
+            origin="lower",
+            aspect="auto",
+            extent=[0, r_max, theta_min, theta_max],
+            cmap=cmap,
+            norm=norm,
+            interpolation="nearest"
+        )
 
-            if show_fill:
-                cbar = fig.colorbar(im, ax=ax)
-                cbar.set_ticks(np.arange(len(categories)))
-                cbar.set_ticklabels(categories)
+        if show_fill:
+            cbar = fig.colorbar(im, ax=ax)
+            cbar.set_ticks(np.arange(len(categories)))
+            cbar.set_ticklabels(categories)
 
-        # Show RF heatmap
         # Show RF heatmap
         if show_rf and self._heatmap is not None:
             im = ax.imshow(
