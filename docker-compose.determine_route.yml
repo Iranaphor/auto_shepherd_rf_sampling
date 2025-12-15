@@ -1,0 +1,61 @@
+# ###########################################################################
+#
+# @author      James R. Heselden (github: iranaphor)
+# @maintainer  James R. Heselden (github: iranaphor)
+# @datecreated 24th November 2025
+# @credits     Code structure and implementation were developed by the
+#              author with assistance from OpenAI's GPT-5.1 model, used
+#              under the author's direction and supervision.
+#
+# ###########################################################################
+
+services:
+  app:
+
+    # Build locally running the dockerfile relative to the context of the cwd
+    build: .
+
+    # Run container processes as the same UID:GID as the host user
+    user: "${UID}:${GID}"
+
+    # Mount local ./data directory into /data in the container
+    # Mount local ./src directory into /src in the container
+    volumes:
+      - ./data:/data
+      - ./app:/app
+
+    #Declare the environment variable $DATA_PATH
+    environment:
+      - DATA_PATH=/data/riseholme_lake
+      - CENTER_LAT=53.26831
+      - CENTER_LON=-0.52984
+      - ANGULAR_BIN_SIZE=30.0
+      - RADIAL_BIN_SIZE=20.0
+
+    #Execute command
+    command: ["python3", "/app/generate_search_route.py"]
+
+
+    # 1. Generate a waypoint path to optimise data collection
+    # Takes in obstacle-map and base location and generates 
+    # a list of waypoints to optimise search through obstacle 
+    # signatures.
+
+    #  /app/generate_search_route.py
+    #     - obstacle map from kml
+    #       - generate (+save)
+    #     - generate grid
+    #       - calculate obstacle signature from each point to base
+    #       - for each 8-connected edge, make N subnodes
+    #       - count unique signatures over each subnode
+    #       - count unique signature over edge
+    #       - plot points over obstacle xy colouring points based on data potential
+    #       - now, we want to search the space to get as many unique collectibles
+    #       - our context of signatures is not important now
+    #       - orienteering problem (informative path planning)
+    #       - we want to generate a path where nodes/edges give one-time rewards
+    #       - so lets say thats implemented and wow it works
+    #       - generate image of desired path over environment
+    #       - generate image of expected obstacle signatures
+    #       - generate image of expected obstacle signature set
+
